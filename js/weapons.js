@@ -5,6 +5,7 @@ import { A, texSet } from './assets.js';
 import { WEAPONS, KNIVES } from './data.js';
 import { skinTexture } from './textures.js';
 import { buildKnifeModel } from './knives.js';
+import { hasProcGun, procGunGeometry } from './guns.js';
 import { applyFx } from './skinart.js';
 
 export { WEAPONS };
@@ -58,8 +59,8 @@ export function skinMaterial(skin) {
   if (skin.pattern === 'art') {
     // рисунок растягиваем ровно на габариты оружия (боковая проекция UV)
     const w = WEAPONS[skin.weapon];
-    if (w && A.gltf[w.model]) {
-      const box = modelMeta(w.model).box;
+    if (w && (hasProcGun(skin.weapon) || A.gltf[w.model])) {
+      const box = hasProcGun(skin.weapon) ? procGunGeometry(skin.weapon).meta.box : modelMeta(w.model).box;
       const u0 = -box.max.z * 3.2, u1 = -box.min.z * 3.2, v0 = box.min.y * 3.2 - 0.04, v1 = box.max.y * 3.2 + 0.04;
       const tt = t.clone(); tt.needsUpdate = true;
       tt.repeat.set(1 / (u1 - u0), 1 / (v1 - v0)); tt.offset.set(-u0 / (u1 - u0), -v0 / (v1 - v0));
@@ -248,6 +249,7 @@ export function buildWeaponModel(id, skin) {
     return g;
   }
   const w = WEAPONS[id];
+  if (w && hasProcGun(id)) return buildProcGun(id, skin);
   const src = w && A.gltf[w.model];
   const g = new THREE.Group();
   if (!src) return g;
@@ -272,6 +274,36 @@ export function buildWeaponModel(id, skin) {
   Object.assign(g.userData, {
     muzzle, gripR: meta.gripR.clone(), gripL: meta.gripL.clone(), sightY, mag, bolt,
     magRest: mag ? mag.position.clone() : null, boltRest: bolt ? bolt.position.clone() : null, length: meta.length, box: meta.box,
+  });
+  return g;
+}
+
+// ---------- Процедурные модели (guns.js) ----------
+function roleMaterial(role, skinMat) {
+  const m = mats();
+  if (skinMat && (role === 'body' || (skinMat.userData.art && (role === 'metal' || role === 'wood')))) return skinMat;
+  return { body: m.body, metal: m.steelDark, steel: m.steel, wood: m.wood, rubber: m.rubber, lens: m.lens, brass: m.brass }[role] || m.body;
+}
+function buildProcGun(id, skin) {
+  const { roles, meta } = procGunGeometry(id);
+  const sm = skinMaterial(skin);
+  const g = new THREE.Group();
+  const targets = {};
+  for (const [key, geo] of Object.entries(roles)) {
+    const [tgt, role] = key.includes(':') ? key.split(':') : [null, key];
+    const mesh = new THREE.Mesh(geo, roleMaterial(role, sm));
+    mesh.castShadow = true; mesh.receiveShadow = true; mesh.frustumCulled = false;
+    if (tgt) { if (!targets[tgt]) { targets[tgt] = new THREE.Group(); targets[tgt].name = tgt; g.add(targets[tgt]); } targets[tgt].add(mesh); }
+    else g.add(mesh);
+  }
+  const muzzle = new THREE.Object3D(); muzzle.position.copy(meta.muzzle); g.add(muzzle);
+  const w = WEAPONS[id];
+  Object.assign(g.userData, {
+    muzzle, gripR: meta.gripR.clone(), gripL: meta.gripL.clone(),
+    sightY: meta.sightY !== null ? meta.sightY : meta.gripR.y + 0.06,
+    mag: targets.mag || null, bolt: targets.bolt || null, pump: targets.pump || null,
+    magRest: targets.mag ? new THREE.Vector3() : null, boltRest: targets.bolt ? new THREE.Vector3() : null,
+    length: meta.length, box: meta.box, proc: true, scoped: (w.scope || 0) >= 3,
   });
   return g;
 }

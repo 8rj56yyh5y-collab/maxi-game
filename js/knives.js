@@ -54,6 +54,12 @@ const BLADES = {
   claw: { L: 0.11, prof: P((u) => -0.075 * u * u, (u) => 0.011 * (1 - Math.pow(u, 1.5)), (u) => 0.014 * (1 - Math.pow(u, 1.2)), (u) => lerp(0.0045, 0.0012, u), 0.55) },
   dagger: { L: 0.12, prof: P(() => 0, (u) => 0.021 * (1 - u), (u) => 0.021 * (1 - u), (u) => lerp(0.0065, 0.001, u), 0, true) },
   stiletto: { L: 0.19, prof: P(() => 0, (u) => 0.015 * (1 - Math.pow(u, 1.4)), (u) => 0.015 * (1 - Math.pow(u, 1.4)), (u) => lerp(0.0055, 0.001, u), 0, true) },
+  tanto: { L: 0.17, prof: P(() => 0, (u) => 0.015 * (u < 0.82 ? 1 : 1 - (u - 0.82) / 0.18 * 0.15) * (u < 0.97 ? 1 : 0), (u) => u < 0.8 ? 0.015 : 0.015 * (1 - (u - 0.8) / 0.2), (u) => lerp(0.006, 0.002, u), 0.5) },
+  bowie: { L: 0.24, prof: P((u) => -0.004 * u, (u) => 0.02 * tipA(u, 0.55, 0.65), (u) => 0.022 * (1 - Math.pow(u, 3.2)), (u) => lerp(0.0065, 0.0013, u), 0.5) },
+  machete: { L: 0.32, prof: P((u) => 0.006 * Math.sin(u * Math.PI), (u) => 0.018 * (1 - Math.pow(u, 8)), (u) => (0.018 + 0.012 * Math.sin(u * Math.PI * 0.9)) * (1 - Math.pow(u, 6)), (u) => lerp(0.004, 0.0015, u), 0.4) },
+  fairbairn: { L: 0.17, prof: P(() => 0, (u) => 0.013 * (1 - u), (u) => 0.013 * (1 - u), (u) => lerp(0.006, 0.001, u), 0, true) },
+  navaja: { L: 0.18, prof: P((u) => -0.03 * u * u, (u) => 0.012 * (1 - Math.pow(u, 1.8)), (u) => 0.015 * (1 - Math.pow(u, 2.5)), (u) => lerp(0.0035, 0.001, u), 0.65) },
+  skinner: { L: 0.13, prof: P((u) => 0.01 * u, (u) => 0.012 * (1 - Math.pow(u, 1.2)), (u) => 0.022 * (1 - Math.pow(u, 1.5)), (u) => lerp(0.005, 0.0012, u), 0.6) },
   butterfly: { L: 0.17, prof: P((u) => -0.002 * u, (u) => 0.012 * tipA(u, 0.65, 0.8), (u) => 0.012 * (1 - Math.pow(u, 5)), (u) => lerp(0.004, 0.0011, u), 0.6) },
 };
 
@@ -121,6 +127,20 @@ function rbox(w, h, d, r, mat, x, y, z) { const m = new THREE.Mesh(new RoundedBo
 function cyl(r1, r2, len, mat, seg = 16) { return new THREE.Mesh(new THREE.CylinderGeometry(r1, r2, len, seg), mat); }
 function pins(g, mat, zs, y = 0, w = 0.026) { for (const z of zs) { const p = cyl(0.0032, 0.0032, w + 0.002, mat, 10); p.rotation.z = Math.PI / 2; p.position.set(0, y, z); g.add(p); } }
 function bladeMesh(type, mat) { const B = BLADES[type]; const m = new THREE.Mesh(bladeGeometry(B.L, B.prof), mat); m.userData.L = B.L; return m; }
+
+// Эргономичная рукоять: профиль сбоку (подпальцевые выемки, изгиб), выдавленный с фаской
+function ergoHandle(g, mat, len, h, w, { curve = 0, fingers = true, pommel = 0 } = {}) {
+  const s = new THREE.Shape(), N = 24;
+  const top = (t) => h / 2 - curve * t * t, bot = (t) => -h / 2 - curve * t * t + (fingers && t < 0.6 ? Math.max(0, Math.sin(t / 0.6 * Math.PI * 3)) * 0.004 : 0) - (t > 0.85 ? (t - 0.85) * 0.03 * pommel : 0);
+  s.moveTo(0, top(0));
+  for (let i = 1; i <= N; i++) { const t = i / N; s.lineTo(t * len, top(t)); }
+  for (let i = N; i >= 0; i--) { const t = i / N; s.lineTo(t * len, bot(t)); }
+  const geo = new THREE.ExtrudeGeometry(s, { depth: w - 0.006, bevelEnabled: true, bevelThickness: 0.003, bevelSize: 0.003, bevelSegments: 3 });
+  geo.translate(0, 0, -(w - 0.006) / 2); geo.rotateY(-Math.PI / 2);
+  const p = geo.attributes.position, uv = new Float32Array(p.count * 2); for (let i = 0; i < p.count; i++) { uv[i * 2] = p.getZ(i) * 8; uv[i * 2 + 1] = p.getY(i) * 8; } geo.setAttribute('uv', new THREE.BufferAttribute(uv, 2));
+  geo.computeVertexNormals();
+  const m = new THREE.Mesh(geo, mat); g.add(m); return m;
+}
 
 // ---------- Сборка ножа ----------
 export function buildKnifeModel(type, skin) {
@@ -210,6 +230,50 @@ export function buildKnifeModel(type, skin) {
       const h = rbox(0.016, 0.022, 0.12, 0.007, K.g10, 0, 0, 0.066); g.add(h);
       g.add(rbox(0.018, 0.006, 0.105, 0.002, K.steel, 0, 0.011, 0.066)); g.add(rbox(0.018, 0.006, 0.105, 0.002, K.steel, 0, -0.011, 0.066));
       g.add(cyl(0.006, 0.008, 0.014, K.steel, 12)).rotation.x = Math.PI / 2; g.children[g.children.length - 1].position.z = 0.13;
+      break;
+    }
+    case 'tanto': {
+      g.add(bladeMesh('tanto', blade));
+      g.add(rbox(0.012, 0.05, 0.008, 0.003, K.dark, 0, 0, 0.002));
+      ergoHandle(g, K.g10, 0.12, 0.028, 0.024, { fingers: true });
+      pins(g, K.steel, [0.03, 0.09], 0, 0.025);
+      break;
+    }
+    case 'bowie': {
+      g.add(bladeMesh('bowie', blade));
+      g.add(rbox(0.016, 0.07, 0.01, 0.003, K.brass, 0, -0.003, 0.003));
+      ergoHandle(g, K.wood, 0.125, 0.032, 0.028, { curve: 0.006, fingers: false, pommel: 1 });
+      pins(g, K.brass, [0.035, 0.09], -0.002, 0.029);
+      g.add(rbox(0.03, 0.034, 0.012, 0.005, K.brass, 0, -0.006, 0.128));
+      break;
+    }
+    case 'machete': {
+      g.add(bladeMesh('machete', blade));
+      ergoHandle(g, K.rubber, 0.13, 0.03, 0.026, { curve: 0.012, fingers: true, pommel: 1.5 });
+      g.add(rbox(0.006, 0.024, 0.02, 0.002, K.dark, 0, 0, 0.003));
+      break;
+    }
+    case 'fairbairn': {
+      g.add(bladeMesh('fairbairn', blade));
+      g.add(rbox(0.012, 0.06, 0.006, 0.003, K.brass, 0, 0, 0.002));
+      const hg = new THREE.LatheGeometry([[0, 0], [0.008, 0], [0.011, 0.03], [0.009, 0.08], [0.012, 0.105], [0.009, 0.115], [0, 0.115]].map(([r, y]) => new THREE.Vector2(r, y)), 20); hg.rotateX(Math.PI / 2); hg.translate(0, 0, 0.006);
+      g.add(new THREE.Mesh(hg, K.brass));
+      for (let k = 0; k < 10; k++) { const ring = new THREE.Mesh(new THREE.TorusGeometry(0.0105, 0.0012, 6, 20), K.dark); ring.position.z = 0.025 + k * 0.007; g.add(ring); }
+      break;
+    }
+    case 'navaja': {
+      const b = bladeMesh('navaja', blade); g.add(b);
+      ergoHandle(g, K.wood, 0.14, 0.024, 0.02, { curve: 0.018, fingers: false, pommel: 0 });
+      g.add(rbox(0.022, 0.02, 0.012, 0.004, K.brass, 0, 0, 0.004));
+      g.add(rbox(0.021, 0.016, 0.014, 0.004, K.brass, 0, -0.016, 0.136));
+      pins(g, K.brass, [0.02, 0.06, 0.1], -0.005, 0.021);
+      break;
+    }
+    case 'skinner': {
+      g.add(bladeMesh('skinner', blade));
+      ergoHandle(g, K.wood, 0.11, 0.03, 0.026, { curve: 0.004, fingers: true, pommel: 1 });
+      pins(g, K.brass, [0.03, 0.08], -0.002, 0.027);
+      g.add(rbox(0.01, 0.036, 0.008, 0.002, K.steel, 0, -0.004, 0.003));
       break;
     }
     default: { // боевой (тактический)

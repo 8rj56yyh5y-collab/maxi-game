@@ -49,6 +49,12 @@ export const KNIVES = {
   folding:   { id: 'folding', name: 'Складной нож', type: 'folding', rarity: 'epic' },
   cleaver:   { id: 'cleaver', name: 'Тесак', type: 'cleaver', rarity: 'legendary' },
   stiletto:  { id: 'stiletto', name: 'Стилет', type: 'stiletto', rarity: 'mythic' },
+  tanto:     { id: 'tanto', name: 'Танто', type: 'tanto', rarity: 'legendary' },
+  bowie:     { id: 'bowie', name: 'Боуи', type: 'bowie', rarity: 'legendary' },
+  machete:   { id: 'machete', name: 'Мачете', type: 'machete', rarity: 'epic' },
+  fairbairn: { id: 'fairbairn', name: 'Кинжал коммандос', type: 'fairbairn', rarity: 'mythic' },
+  navaja:    { id: 'navaja', name: 'Наваха', type: 'navaja', rarity: 'mythic' },
+  skinner:   { id: 'skinner', name: 'Скиннер', type: 'skinner', rarity: 'legendary' },
 };
 export const KNIFE_STATS = { damage: 40, heavy: 65, backstab: 180, rpm: 140, range: 2.2, speed: 1.15 };
 
