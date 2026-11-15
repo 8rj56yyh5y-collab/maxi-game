@@ -6,6 +6,8 @@ import { surface, contactShadowTexture, leafTexture } from './textures.js';
 import { texSet } from './assets.js';
 import { cityMaterial, cityTile, finishLighting, makeLightPool } from './city.js';
 import { CITY_MAPS } from './citymaps.js';
+import { REAL_MAPS } from './realmaps.js';
+import { loadKits } from './kit.js';
 let curNight = false;
 const isCityKey = (k) => k.includes('|') || ['neonH', 'neonV', 'winLit', 'glass', 'shopGlass', 'vending', 'ads', 'lantern', 'clock', 'roofTile', 'roofTileJp', 'bulb', 'chrome', 'carGlass', 'tail', 'head', 'bark', 'iron', 'skyline', 'leafPalm'].includes(k);
 
@@ -124,7 +126,13 @@ export const MAPS = {
   },
 };
 
-Object.assign(MAPS, CITY_MAPS);
+{ const old = { ...MAPS }; for (const k of Object.keys(MAPS)) delete MAPS[k]; Object.assign(MAPS, REAL_MAPS, old, CITY_MAPS); }
+
+// Догрузить модели карты (фотореалистичные наборы) до buildMap
+export async function prepareMap(id, onProgress) {
+  const def = MAPS[id];
+  if (def && def.kits) await loadKits(def.kits, onProgress);
+}
 
 // ---------- материалы ----------
 const matCache = {};
@@ -592,7 +600,7 @@ export function buildMap(scene, id, quality) {
   const R = rnd(id === 'oasis' ? 1234 : id.length * 97 + 777);
   let lightCtx = null;
   if (def.build) {
-    lightCtx = { R, night: !!def.night, evening: !!def.evening, pools: [], lamps: [] };
+    lightCtx = { R, night: !!def.night, evening: !!def.evening, pools: [], lamps: [], quality };
     def.build(B, group, lightCtx);
     const byCol = finishLighting(group, lightCtx, quality);
     for (const [k, geos] of Object.entries(byCol)) for (const g of geos) B.push('pool|' + k, g);

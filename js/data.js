@@ -189,6 +189,7 @@ export function levelInfo(xp) {
 
 // ---------- Карты ----------
 export const MAP_INFO = {
+  factory: { name: 'Фабрика', desc: 'Промышленный квартал: кирпичные цеха, дворы, переулки.', modes: ['defuse', 'tdm', 'ffa', 'gungame'] },
   oasis: { name: 'Оазис', desc: 'Пустынный город. Две точки, три линии.', modes: ['defuse', 'tdm', 'ffa', 'gungame'] },
   port:  { name: 'Порт', desc: 'Контейнерный терминал на закате.', modes: ['defuse', 'tdm', 'ffa', 'gungame'] },
   tokyo: { name: 'Токио', desc: 'Ночной квартал с неоном.', modes: ['defuse', 'tdm', 'ffa', 'gungame'] },

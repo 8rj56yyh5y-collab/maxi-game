@@ -46,7 +46,13 @@ export function setupAtmosphere(renderer, scene, def, quality, hdri = null) {
   u.mieDirectionalG.value = 0.8;
   const sunDir = new THREE.Vector3().setFromSphericalCoords(1, THREE.MathUtils.degToRad(90 - def.sky.elevation), THREE.MathUtils.degToRad(def.sky.azimuth));
   u.sunPosition.value.copy(sunDir);
-  scene.add(sky);
+  if (def.skyImage) {
+    // фотопанорама неба вместо процедурного
+    const t = new THREE.TextureLoader().load(def.skyImage, () => { scene.background = t; });
+    t.mapping = THREE.EquirectangularReflectionMapping; t.colorSpace = THREE.SRGBColorSpace;
+    scene.backgroundIntensity = def.skyIntensity || 1;
+    scene.backgroundRotation.set(0, 0, 0);
+  } else scene.add(sky);
 
   // Окружение (отражения/рассеянный свет): HDRI-панорама или небо
   const pmrem = new THREE.PMREMGenerator(renderer);

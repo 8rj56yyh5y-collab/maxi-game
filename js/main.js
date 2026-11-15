@@ -4,7 +4,7 @@ import { settings, saveSettings, getLayout, DEFAULT_LAYOUT, BUTTON_LABELS, isTou
 import { Input, BTN_ICONS } from './input.js';
 import { HUD } from './hud.js';
 import { Game } from './game.js';
-import { MAPS, buildMap } from './maps.js';
+import { MAPS, buildMap, prepareMap } from './maps.js';
 import { WEAPONS, KNIVES, GRENADES, CATS, CAT_ORDER, MODES, MAP_INFO, RARITY, RARITY_ORDER, CASES, STORE, levelInfo, itemName, rankOf, rankBadge, SEASON, PASS, PASS_XP, SKINS as ALL_SKINS } from './data.js';
 import { DIFFICULTY } from './bots.js';
 import { profile, saveProfile, SKINS, equip, equippedSkin, openCase, buyCase, casePrice, caseContents, sellSkin, ownedKnives, buyStoreItem, dailyAvailable, claimDaily, weaponAvailableFor, passLevel, claimPass } from './skins.js';
@@ -124,12 +124,13 @@ function setLobbyMode(mode) {
 
 // ---------- Живой фон: выбранная карта ----------
 const lobbyMap = { scene: null, id: null, cam: new THREE.PerspectiveCamera(42, innerWidth / innerHeight, 0.05, 1000), building: null };
-const LOBBY_SPOT = { oasis: [-24, -1], port: [0, -28], tokyo: [-24, 0.5], oldtown: [-22, 0], brooklyn: [-24, 5.4], santorini: [-24, 0], paris: [-24, 0], kyoto: [-24, 0], miami: [-24, 0], amsterdam: [-24, 0], hongkong: [-24, 0.5] };
+const LOBBY_SPOT = { factory: [-38, 1.5], oasis: [-24, -1], port: [0, -28], tokyo: [-24, 0.5], oldtown: [-22, 0], brooklyn: [-24, 5.4], santorini: [-24, 0], paris: [-24, 0], kyoto: [-24, 0], miami: [-24, 0], amsterdam: [-24, 0], hongkong: [-24, 0.5] };
 async function setLobbyMap(id) {
   if (lobbyMap.id === id) return;
   if (lobbyMap.building) { lobbyMap.pending = id; return; }
   lobbyMap.building = id;
   try {
+    await prepareMap(id);
     const sc = new THREE.Scene();
     const m = buildMap(sc, id, settings.quality);
     const at = setupAtmosphere(renderer, sc, MAPS[id], settings.quality, await loadHDRI(MAPS[id].hdri));
@@ -196,8 +197,9 @@ function renderLobby(dt) {
 
 // ---------- Превью карт ----------
 const mapThumbs = {};
-const THUMB_CAM = { oasis: [[-38, 10, 16], [0, 0, -4]], port: [[-30, 13, -35], [2, 0, 4]] };
+const THUMB_CAM = { factory: [[-46, 3.5, 1], [0, 6, 0]], oasis: [[-38, 10, 16], [0, 0, -4]], port: [[-30, 13, -35], [2, 0, 4]] };
 async function renderMapThumb(id) {
+  await prepareMap(id);
   const sc = new THREE.Scene();
   buildMap(sc, id, 'medium');
   const at = setupAtmosphere(renderer, sc, MAPS[id], 'medium', await loadHDRI(MAPS[id].hdri));
@@ -731,6 +733,7 @@ async function startMatch() {
   $('loading').classList.remove('hidden');
   await nextFrame();
   const m = settings.match;
+  await prepareMap(m.map, (p) => { $('load-fill').style.width = (20 + p * 60) + '%'; });
   const hdri = await loadHDRI(MAPS[m.map].hdri);
   applyPixelRatio();
   renderer.setSize(innerWidth, innerHeight, false);
