@@ -728,6 +728,12 @@ export class Game {
       victim.brain.lastPos = { x: attacker.pos.x, z: attacker.pos.z }; victim.brain.lastSeen = this.time - 1;
     }
     const killed = victim.health <= 0.5;
+    if (victim.model) {
+      const from = attacker && attacker !== victim ? attacker.pos : victim.pos.clone().add(new THREE.Vector3(Math.random() - 0.5, 0, Math.random() - 0.5));
+      const dir = victim.pos.clone().sub(from).setY(0); if (dir.lengthSq() < 1e-4) dir.set(Math.random() - 0.5, 0, Math.random() - 0.5); dir.normalize();
+      victim.lastHitDir = dir; victim.lastHitPow = explosive ? 7 : Math.min(4.5, 1.6 + amount / 30);
+      if (!killed) victim.model.hit(dir, head, amount);
+    }
     if (attacker && attacker.isPlayer && attacker !== victim) {
       this.hud.hitmarker(head, killed); sound.hit(head);
       if (settings.damageNumbers) this.hud.damageNumber(Math.round(amount), head, victim.pos, this.camera);
@@ -745,7 +751,11 @@ export class Game {
     victim.alive = false; victim.health = 0; victim.deaths++;
     victim.respawnAt = this.time + (this.mode === 'gungame' ? 2 : victim.isPlayer ? 4 : 3);
     victim.killer = killer; victim.killerWeapon = weaponId;
-    if (victim.model) victim.model.deathDir = Math.random() < 0.5 ? 1 : -1;
+    if (victim.model) {
+      victim.model.deathDir = Math.random() < 0.5 ? 1 : -1;
+      const imp = (victim.lastHitDir || new THREE.Vector3(0, 0, 1)).clone().multiplyScalar(victim.lastHitPow || 2.5).add(new THREE.Vector3(victim.vel.x * 0.8, victim.lastHitPow > 5 ? 3 : 0.3, victim.vel.z * 0.8));
+      try { victim.model.die(imp, head, this.map.colliders); } catch (e) { console.error(e); }
+    }
     if (victim.inv.bomb) this.dropBomb(victim);
     if (victim.plantT || victim.defuseT) { victim.plantT = 0; victim.defuseT = 0; if (this.bomb && this.bomb.defuser === victim) this.bomb.defuser = null; }
     // ассист

@@ -149,10 +149,36 @@ async function setLobbyMap(id) {
 function disposeLobbyMap() {
   if (!lobbyMap.scene) return;
   if (lobby.char && lobby.char.root.parent === lobbyMap.scene) lobby.scene.add(lobby.char.root);
+  if (lobby.squad) for (const m of lobby.squad) if (m.ch.root.parent) m.ch.root.parent.remove(m.ch.root);
   lobbyMap.pipe.dispose();
   lobbyMap.scene.traverse(o => { if (o.geometry && !o.isSkinnedMesh) o.geometry.dispose(); });
   lobbyMap.atmo.env.dispose();
   lobbyMap.scene = null; lobbyMap.id = null;
+}
+
+// Отряд за спиной игрока в лобби
+const SQUAD_GUNS = { A: ['ar4', 'awr', 'mp7', 'br17'], B: ['ak', 'sv98', 'pp19', 'uz9'] };
+const SQUAD_POS = [[1.5, 1.2, 0.35], [1.6, -1.25, 0.6], [2.9, 0.4, 0.2], [3.0, -0.75, 0.75]];
+function updateSquad(dt, cx, cz) {
+  if (!lobbyMap.scene) return;
+  if (!lobby.squad || lobby.squadTeam !== lobby.team) {
+    if (lobby.squad) for (const m of lobby.squad) m.ch.root.parent && m.ch.root.parent.remove(m.ch.root);
+    lobby.squadTeam = lobby.team;
+    lobby.squad = SQUAD_POS.map((p, i) => {
+      const ch = new CharacterModel(lobby.team);
+      const gun = SQUAD_GUNS[lobby.team][i];
+      try { ch.setWeapon(WEAPONS[gun] ? gun : (lobby.team === 'A' ? 'ar4' : 'ak'), null); } catch (e) { /* ignore */ }
+      ch.mixer.update(i * 1.7);
+      return { ch, p, actor: { pos: new THREE.Vector3(), vel: new THREE.Vector3(), yaw: 0, pitch: -0.12 - i * 0.03, alive: true, crouchT: i === 2 ? 0.55 : 0 } };
+    });
+  }
+  const cam = lobbyMap.cam;
+  for (const m of lobby.squad) {
+    if (m.ch.root.parent !== lobbyMap.scene) lobbyMap.scene.add(m.ch.root);
+    m.actor.pos.set(cx + m.p[0], 0, cz + m.p[1]);
+    m.actor.yaw = Math.atan2(-(cam.position.x - m.actor.pos.x), -(cam.position.z - m.actor.pos.z)) + m.p[2];
+    m.ch.update(dt, m.actor);
+  }
 }
 
 function renderLobby(dt) {
@@ -165,12 +191,13 @@ function renderLobby(dt) {
     const o = Math.sin(lobby.t * 0.08) * 0.35;
     const cam = lobbyMap.cam;
     cam.aspect = aspect; cam.updateProjectionMatrix();
-    cam.position.set(cx - 4.6 * Math.cos(o), 1.45 + Math.sin(lobby.t * 0.11) * 0.08, cz + 4.6 * Math.sin(o));
-    cam.lookAt(cx + 0.3, 1.2, cz);
+    cam.position.set(cx - 5.6 * Math.cos(o), 1.55 + Math.sin(lobby.t * 0.11) * 0.08, cz + 5.6 * Math.sin(o));
+    cam.lookAt(cx + 0.6, 1.25, cz);
     lobby.actor.pos.set(cx, 0, cz);
     if (lobbyMap.key) { lobbyMap.key.position.set(cam.position.x + 0.6, 3.2, cam.position.z + 1.5); lobbyMap.key.target.position.set(cx, 1.1, cz); lobbyMap.rim.position.set(cx + 1.6, 2.2, cz - 1.2); }
     lobby.actor.yaw = Math.atan2(-(cam.position.x - cx), -(cam.position.z - cz)) + 0.45;
     lobby.char.update(dt, lobby.actor);
+    updateSquad(dt, cx, cz);
     if (lobbyMap.map.updateLights) lobbyMap.map.updateLights(cam.position);
     followShadow(lobbyMap.atmo.sun, lobbyMap.atmo.sunDir, cam.position);
     lobbyMap.atmo.sky.position.copy(cam.position);

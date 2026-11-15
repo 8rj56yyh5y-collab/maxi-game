@@ -13,10 +13,12 @@ function mats() {
   if (M.ready) return M;
   const metalTex = texSet('metal2');
   const detail = (o) => new THREE.MeshStandardMaterial({ normalMap: metalTex.normalMap, normalScale: new THREE.Vector2(0.35, 0.35), ...o });
-  M.body = detail({ color: 0x2a2c30, metalness: 0.25, roughness: 0.55, envMapIntensity: 0.6 });
-  M.poly = new THREE.MeshStandardMaterial({ color: 0x1b1d20, metalness: 0.05, roughness: 0.7 });
-  M.steelDark = detail({ color: 0x35383d, metalness: 0.7, roughness: 0.38, envMapIntensity: 0.7 });
-  M.steel = detail({ color: 0x9aa0a6, metalness: 0.95, roughness: 0.22 });
+  // воронёный металл с потёртостями и чёрный полимер (фото-текстуры ambientCG, CC0)
+  const gm = texSet('gun_metal'), gp = texSet('gun_poly');
+  M.body = new THREE.MeshStandardMaterial({ map: gp.map, normalMap: gp.normalMap, roughnessMap: gp.roughnessMap, color: 0x9a9a9a, metalness: 0.1, roughness: 0.9, normalScale: new THREE.Vector2(0.8, 0.8), envMapIntensity: 0.9 });
+  M.poly = M.body;
+  M.steelDark = new THREE.MeshStandardMaterial({ map: gm.map, normalMap: gm.normalMap, roughnessMap: gm.roughnessMap, color: 0x6a6c70, metalness: 0.85, roughness: 0.75, envMapIntensity: 1.1 });
+  M.steel = new THREE.MeshStandardMaterial({ map: gm.map, normalMap: gm.normalMap, roughnessMap: gm.roughnessMap, color: 0xc8ccd0, metalness: 1, roughness: 0.55, envMapIntensity: 1.2 });
   const wood = texSet('wood2');
   M.wood = new THREE.MeshStandardMaterial({ map: wood.map, normalMap: wood.normalMap, color: 0xb08060, metalness: 0, roughness: 0.55 });
   M.brass = new THREE.MeshStandardMaterial({ color: 0xc9a043, metalness: 1, roughness: 0.3 });
