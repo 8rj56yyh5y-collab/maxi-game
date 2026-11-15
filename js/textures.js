@@ -364,6 +364,14 @@ export function skinCanvas(skin, size = 256) {
   const S = size / 128;
   ctx.fillStyle = a; ctx.fillRect(0, 0, size, size);
   switch (skin.pattern) {
+    case 'knife': {
+      const g = ctx.createLinearGradient(0, 0, size, size);
+      skin.colors.forEach((c, i) => g.addColorStop(i / Math.max(1, skin.colors.length - 1), c));
+      ctx.fillStyle = g; ctx.fillRect(0, 0, size, size);
+      const sh = ctx.createLinearGradient(0, 0, 0, size); sh.addColorStop(0, 'rgba(255,255,255,0.35)'); sh.addColorStop(0.5, 'rgba(255,255,255,0)'); sh.addColorStop(1, 'rgba(0,0,0,0.25)');
+      ctx.fillStyle = sh; ctx.fillRect(0, 0, size, size);
+      break;
+    }
     case 'solid': noiseDots(ctx, size, 800, r, 0.06); break;
     case 'stripes':
       ctx.fillStyle = b;

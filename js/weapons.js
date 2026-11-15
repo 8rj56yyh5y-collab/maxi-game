@@ -4,6 +4,7 @@ import { clone as cloneSkinned } from 'three/addons/utils/SkeletonUtils.js';
 import { A, texSet } from './assets.js';
 import { WEAPONS, KNIVES } from './data.js';
 import { skinTexture } from './textures.js';
+import { buildKnifeModel } from './knives.js';
 
 export { WEAPONS };
 
@@ -218,7 +219,7 @@ export function buildGrenade(type) {
 // ---------- Сборка оружия ----------
 export function buildWeaponModel(id, skin) {
   if (KNIVES[id]) {
-    const g = buildKnife(KNIVES[id].type, skin);
+    const g = buildKnifeModel(KNIVES[id].type, skin);
     const mz = new THREE.Object3D(); mz.position.set(0, 0, -0.2); g.add(mz);
     Object.assign(g.userData, { muzzle: mz, gripR: new THREE.Vector3(0, 0, 0.055), gripL: null, sightY: 0, knife: true });
     return g;

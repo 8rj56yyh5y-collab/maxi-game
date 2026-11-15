@@ -7,6 +7,7 @@ import { surface } from './textures.js';
 
 // Положение точки хвата относительно глаза
 const HIP = { pistol: [0.1, -0.12, -0.38], smg: [0.105, -0.13, -0.24], rifle: [0.105, -0.135, -0.22], sniper: [0.105, -0.13, -0.2], shotgun: [0.105, -0.13, -0.23], knife: [0.13, -0.13, -0.34], grenade: [0.12, -0.12, -0.3] };
+const sm01 = (x) => { const t = Math.min(1, Math.max(0, x)); return t * t * (3 - 2 * t); };
 const ADS_Z = { pistol: -0.38, smg: -0.15, rifle: -0.14, sniper: -0.1, shotgun: -0.16 };
 
 function category(id) {
@@ -75,12 +76,43 @@ export class ViewModel {
     this.muzzle = ud.muzzle;
     this.muzzle.add(this.flash);
     this.switchT = 1; this.reloadT = 0; this.boltT = 0; this.throwT = 0;
+    this.knifeDraw = this.cat === 'knife' ? 1 : 0;
+    this.gunBase = gun.position.clone();
+  }
+
+  // Анимации ножа: доставание, осмотр, удары — у каждого вида свои
+  animateKnife(dt) {
+    const ud = this.ud, g = this.gun, type = ud.knifeType;
+    let spin = 0, hA = 0, hB = 0, wr = 0, tw = 0;
+    if (this.knifeDraw > 0) {
+      this.knifeDraw = Math.max(0, this.knifeDraw - dt * 1.6);
+      const t = 1 - this.knifeDraw, e = 1 - Math.pow(1 - t, 3);
+      if (type === 'butterfly') { hA = Math.PI * (1 - sm01(t * 1.6)); hB = Math.PI * (1 - sm01(t * 1.6 - 0.45)); wr = Math.sin(t * Math.PI) * 1.2; }
+      else if (type === 'karambit') spin = (1 - e) * Math.PI * 4;
+      else { tw = (1 - e) * Math.PI * 2; }
+    }
+    if (this.inspectT > 0) {
+      const t = 1 - this.inspectT / 2.2;
+      if (type === 'butterfly') {
+        // серия флипов: рукояти по очереди перелетают через клинок
+        const f = (x) => Math.PI * (Math.sin(Math.PI * Math.min(1, Math.max(0, x))) ** 2);
+        hA = f(t * 4 % 1) * (t < 0.75 ? 1 : 0); hB = f((t * 4 + 0.5) % 1) * (t < 0.75 ? 1 : 0); wr = Math.sin(t * Math.PI * 2) * 0.9;
+      } else if (type === 'karambit') spin = sm01(t * 1.2) * Math.PI * 4;
+      else tw = Math.sin(t * Math.PI) * 1.4;
+    }
+    if (ud.halves) for (const h of ud.halves) h.pivot.rotation.x = h.sx > 0 ? hA : -hB;
+    const q = new THREE.Quaternion().setFromEuler(new THREE.Euler(spin, 0, tw));
+    if (ud.spinPivot && spin) {
+      const P = ud.spinPivot;
+      g.quaternion.copy(q); g.position.copy(this.gunBase).add(P).sub(P.clone().applyQuaternion(q));
+    } else { g.quaternion.copy(q); g.position.copy(this.gunBase); }
+    return wr;
   }
 
   shoot(recoil) {
     this.kick = Math.min(1, this.kick + 0.5 + recoil * 9);
     this.kickRot = Math.min(1, this.kickRot + 0.4 + recoil * 7);
-    if (this.cat === 'knife') { this.knifeT = 1; return; }
+    if (this.cat === 'knife') { this.knifeT = 1; this.slashDir = -(this.slashDir || 1); return; }
     if (this.cat === 'grenade') { this.throwT = 1; return; }
     this.flashT = 0.045;
     this.flash.rotation.z = Math.random() * Math.PI;
@@ -141,10 +173,14 @@ export class ViewModel {
       if (this.ud.bolt && this.ud.boltRest) { this.ud.bolt.position.copy(this.ud.boltRest); this.ud.bolt.position.z += s * 0.08; }
     }
     if (this.knifeT > 0) {
-      this.knifeT = Math.max(0, this.knifeT - dt * 4);
-      const s = Math.sin(this.knifeT * Math.PI);
-      ry += s * 1.0; rx -= s * 0.5; rz -= s * 0.6;
+      this.knifeT = Math.max(0, this.knifeT - dt * 3.6);
+      const t = 1 - this.knifeT, d = this.slashDir || 1;
+      // замах → удар по диагонали → возврат
+      const wind = Math.sin(Math.min(1, t / 0.25) * Math.PI / 2) * (1 - sm01((t - 0.25) / 0.2));
+      const cut = sm01((t - 0.2) / 0.3) * (1 - sm01((t - 0.6) / 0.4));
+      ry += d * (wind * 0.7 - cut * 1.3); rx += wind * 0.35 - cut * 0.6; rz += d * (-wind * 0.5 + cut * 0.9); drop -= wind * 0.03 - cut * 0.02;
     }
+    if (this.cat === 'knife' && this.ud && this.ud.knifeType) { const wr = this.animateKnife(dt); rz += wr * 0.3; }
     if (this.throwT > 0) {
       this.throwT = Math.max(0, this.throwT - dt * 3);
       const s = Math.sin(this.throwT * Math.PI);
@@ -153,7 +189,8 @@ export class ViewModel {
     if (this.inspectT > 0) {
       this.inspectT = Math.max(0, this.inspectT - dt);
       const s = Math.sin((1 - this.inspectT / 2.2) * Math.PI);
-      ry -= s * 0.9; rz += s * 0.4; rx += s * 0.2;
+      if (this.cat === 'knife') { ry -= s * 0.6; rx += s * 0.25; }
+      else { ry -= s * 0.9; rz += s * 0.4; rx += s * 0.2; }
     }
     const crouchOff = crouch ? 0.006 : 0;
     const sx = this.swayX * (1 - a * 0.8), sy = this.swayY * (1 - a * 0.8);

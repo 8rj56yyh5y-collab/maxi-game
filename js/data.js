@@ -45,6 +45,10 @@ export const KNIVES = {
   butterfly: { id: 'butterfly', name: 'Бабочка', type: 'butterfly', rarity: 'mythic' },
   kukri:     { id: 'kukri', name: 'Кукри', type: 'kukri', rarity: 'legendary' },
   dagger:    { id: 'dagger', name: 'Тычковый нож', type: 'dagger', rarity: 'epic' },
+  hunting:   { id: 'hunting', name: 'Охотничий нож', type: 'hunting', rarity: 'legendary' },
+  folding:   { id: 'folding', name: 'Складной нож', type: 'folding', rarity: 'epic' },
+  cleaver:   { id: 'cleaver', name: 'Тесак', type: 'cleaver', rarity: 'legendary' },
+  stiletto:  { id: 'stiletto', name: 'Стилет', type: 'stiletto', rarity: 'mythic' },
 };
 export const KNIFE_STATS = { damage: 40, heavy: 65, backstab: 180, rpm: 140, range: 2.2, speed: 1.15 };
 
@@ -128,7 +132,17 @@ export const STYLES = [
 function hash(s) { let h = 2166136261; for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619); } return h >>> 0; }
 
 export const SKINS = {};
-const allItems = [...Object.keys(WEAPONS), ...Object.keys(KNIVES)];
+import { KNIFE_FINISHES } from './knives.js';
+export { KNIFE_FINISHES };
+// цвета для 2D-превью отделок
+const FINISH_SWATCH = { satin: ['#9aa0a8', '#d8dce0'], mirror: ['#cfd6de', '#ffffff'], black: ['#141518', '#3a3c42'], urban: ['#5a5e64', '#b0b4ba'], night: ['#0d0e14', '#2a2e44'],
+  damascus: ['#7c8088', '#e2e4e8'], casehard: ['#2850c8', '#dcaa3c'], tiger: ['#f0b040', '#8a4008'], web: ['#8e0f14', '#140405'], fade: ['#ffdc3c', '#ff468c', '#8246e6'],
+  ocean: ['#28dce6', '#145aff'], marble: ['#e62a3c', '#1e3ce6'], gold: ['#ffcf6a', '#a8781e'], sapphire: ['#143ce6', '#7ab4ff'], ruby: ['#d20f28', '#ff6a7a'], emerald: ['#0ab45a', '#7affb4'] };
+const allItems = [...Object.keys(WEAPONS)];
+for (const k of Object.keys(KNIVES)) for (const f of KNIFE_FINISHES) {
+  const id = `${k}_${f.key}`;
+  SKINS[id] = { id, weapon: k, name: f.name, rarity: f.rarity, pattern: 'knife', finish: f.key, colors: FINISH_SWATCH[f.key], style: f.key };
+}
 for (const w of allItems) {
   // каждому оружию — свой набор раскрасок (детерминированно)
   const list = STYLES.filter(st => (hash(w + st.key) % 100) < (KNIVES[w] ? 60 : 55) || st.rarity === 'common' && st.key === 'urban');
