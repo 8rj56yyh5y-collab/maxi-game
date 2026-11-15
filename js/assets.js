@@ -8,6 +8,8 @@ const gltfLoader = new GLTFLoader();
 const texLoader = new THREE.TextureLoader();
 const rgbeLoader = new RGBELoader();
 
+// На хостингах, которые не отдают .glb/.hdr, страница задаёт window.MAXI_BIN_EXT (например '.wasm')
+export const BIN = (typeof window !== 'undefined' && window.MAXI_BIN_EXT) || '';
 export const A = { gltf: {}, tex: {}, sfx: {}, hdri: {}, ready: false };
 
 const WEAPON_FILES = [
@@ -41,8 +43,8 @@ async function loadSound(url) {
 // Основная загрузка при старте
 export async function loadCore(onProgress) {
   const jobs = [];
-  for (const f of WEAPON_FILES) jobs.push(() => gltfLoader.loadAsync(`assets/weapons/${f}.glb`).then(g => { A.gltf[f] = g; }));
-  jobs.push(() => gltfLoader.loadAsync('assets/chars/soldier.glb').then(g => { A.gltf.soldier = g; }));
+  for (const f of WEAPON_FILES) jobs.push(() => gltfLoader.loadAsync(`assets/weapons/${f}.glb${BIN}`).then(g => { A.gltf[f] = g; }));
+  jobs.push(() => gltfLoader.loadAsync('assets/chars/soldier.glb' + BIN).then(g => { A.gltf.soldier = g; }));
   for (const s of SFX) jobs.push(() => loadSound(`assets/sfx/shot_${s}.mp3`).then(b => { A.sfx['shot_' + s] = b; }));
   for (const s of STEPS) jobs.push(() => loadSound(`assets/sfx/step_${s}.mp3`).then(b => { A.sfx['step_' + s] = b; }));
   let done = 0;
@@ -90,7 +92,7 @@ export function texturesReady() {
 
 export async function loadHDRI(name) {
   if (A.hdri[name]) return A.hdri[name];
-  const t = await rgbeLoader.loadAsync(`assets/hdri/${name}.hdr`);
+  const t = await rgbeLoader.loadAsync(`assets/hdri/${name}.hdr${BIN}`);
   t.mapping = THREE.EquirectangularReflectionMapping;
   A.hdri[name] = t;
   return t;

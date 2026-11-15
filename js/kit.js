@@ -3,6 +3,7 @@ import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { MeshoptDecoder } from 'three/addons/libs/meshopt_decoder.module.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
+import { BIN } from './assets.js';
 
 const loader = new GLTFLoader();
 loader.setMeshoptDecoder(MeshoptDecoder);
@@ -14,7 +15,7 @@ export function loadKits(names, onProgress) {
   let done = 0;
   return Promise.all(names.map(n => {
     if (scenes[n]) { onProgress && onProgress(++done / names.length); return null; }
-    loading[n] = loading[n] || loader.loadAsync(`assets/kits/${n}.glb`).then(g => {
+    loading[n] = loading[n] || loader.loadAsync(`assets/kits/${n}.glb${BIN}`).then(g => {
       scenes[n] = g.scene;
       g.scene.updateMatrixWorld(true);
       g.scene.traverse(o => { if (o.isMesh) prepMaterial(o.material); });
