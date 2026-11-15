@@ -356,7 +356,9 @@ function noiseDots(ctx, size, amount, r, alpha) {
   }
 }
 
+import { artCanvas } from './skinart.js';
 export function skinCanvas(skin, size = 256) {
+  if (skin.pattern === 'art') return artCanvas(skin.art, strHash(skin.id) % 99991 + 1, Math.max(256, size * 2));
   const c = document.createElement('canvas'); c.width = c.height = size;
   const ctx = c.getContext('2d');
   const r = rng(strHash(skin.id));
@@ -503,6 +505,7 @@ const skinTexCache = new Map();
 export function skinTexture(skin) {
   if (skinTexCache.has(skin.id)) return skinTexCache.get(skin.id);
   const t = new THREE.CanvasTexture(skinCanvas(skin, 512));
+  if (skin.pattern === 'art') { t.repeat.set(0.36, 0.95); t.offset.set(0.02, 0.0); }
   t.wrapS = t.wrapT = THREE.RepeatWrapping;
   t.colorSpace = THREE.SRGBColorSpace;
   t.anisotropy = 4;

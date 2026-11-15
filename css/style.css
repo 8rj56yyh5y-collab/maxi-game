@@ -494,3 +494,20 @@ body.can-use .tbtn[data-btn=use] { display: flex; }
 .skin .ipic { width: 100%; aspect-ratio: 2 / 1; object-fit: contain; display: block; background: radial-gradient(ellipse at 50% 65%, color-mix(in srgb, var(--rc, #888) 38%, transparent), transparent 70%), linear-gradient(180deg, rgba(255,255,255,.03), rgba(0,0,0,.25)); }
 .skin .ipic:not(.r3d) { object-fit: cover; opacity: .55; filter: blur(.5px); }
 .skin { border-bottom: 3px solid var(--rc, #888) !important; background: linear-gradient(180deg, rgba(20,26,34,.9), rgba(10,13,18,.95)) !important; }
+/* именные и живые скины, история коллекций */
+.skin { position: relative; }
+.skin.sig { box-shadow: 0 0 0 1px var(--rc) inset, 0 0 22px color-mix(in srgb, var(--rc) 35%, transparent); }
+.live-tag { position: absolute; top: 6px; left: 6px; z-index: 2; font: 700 10px/1 var(--head); letter-spacing: 1.2px; padding: 4px 6px; color: #120c02; background: linear-gradient(90deg, #ffd27a, #ff8a3d); animation: livepulse 1.6s infinite; }
+@keyframes livepulse { 50% { filter: brightness(1.35); } }
+.live { color: #ffb020; animation: livepulse 1.6s infinite; }
+.inv-card .coll { margin-top: 10px; display: flex; flex-direction: column; gap: 2px; }
+.inv-card .coll small { color: var(--muted); font-size: 11px; letter-spacing: 1.4px; text-transform: uppercase; }
+.inv-card .coll b { font-family: var(--head); font-size: 18px; }
+.inv-card .story { font-size: 13.5px; line-height: 1.5; color: #d8dee6; margin: 8px 0 0; font-style: italic; border-left: 2px solid var(--rc); padding-left: 10px; }
+.inv-card .story.dim { color: var(--muted); font-style: normal; }
+.case .case-hero { width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; }
+.case .case-hero .ipic { width: 92%; aspect-ratio: 2 / 1; object-fit: contain; filter: drop-shadow(0 8px 18px rgba(0,0,0,.6)); }
+.case-coll { color: var(--accent2); font-size: 12px; letter-spacing: .5px; margin: -4px 0 6px; }
+.case-lore { background: linear-gradient(90deg, rgba(255,176,32,.12), transparent); border-left: 3px solid var(--accent); padding: 10px 14px; margin-bottom: 12px; }
+.case-lore b { font-family: var(--head); font-size: 20px; letter-spacing: 1px; }
+.case-lore p { margin: 4px 0 0; color: #d0d8e2; font-size: 13.5px; line-height: 1.5; max-width: 70ch; }

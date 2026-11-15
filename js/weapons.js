@@ -5,6 +5,7 @@ import { A, texSet } from './assets.js';
 import { WEAPONS, KNIVES } from './data.js';
 import { skinTexture } from './textures.js';
 import { buildKnifeModel } from './knives.js';
+import { applyFx } from './skinart.js';
 
 export { WEAPONS };
 
@@ -34,6 +35,7 @@ function mats() {
 // Сопоставление материалов модели (плоские цвета) с PBR
 function mapMaterial(name, skinMat) {
   const m = mats();
+  if (skinMat && skinMat.userData.art && /Black|Grey_Dark|Brown|Red/.test(name)) return skinMat;
   if (/Black/.test(name)) return skinMat || m.body;
   if (/Grey_Darker|Grey_Dark/.test(name)) return m.steelDark;
   if (/Grey_Light|Grey_Lighter|White/.test(name)) return m.steel;
@@ -53,6 +55,22 @@ export function skinMaterial(skin) {
     normalMap: texSet('metal2').normalMap, normalScale: new THREE.Vector2(0.25, 0.25),
     emissive: skin.glow ? new THREE.Color(skin.glow) : 0x000000, emissiveMap: skin.glow ? t : null, emissiveIntensity: skin.glow ? 0.45 : 0,
   });
+  if (skin.pattern === 'art') {
+    // рисунок растягиваем ровно на габариты оружия (боковая проекция UV)
+    const w = WEAPONS[skin.weapon];
+    if (w && A.gltf[w.model]) {
+      const box = modelMeta(w.model).box;
+      const u0 = -box.max.z * 3.2, u1 = -box.min.z * 3.2, v0 = box.min.y * 3.2 - 0.04, v1 = box.max.y * 3.2 + 0.04;
+      const tt = t.clone(); tt.needsUpdate = true;
+      tt.repeat.set(1 / (u1 - u0), 1 / (v1 - v0)); tt.offset.set(-u0 / (u1 - u0), -v0 / (v1 - v0));
+      tt.wrapS = tt.wrapT = THREE.ClampToEdgeWrapping;
+      m.map = tt;
+    }
+    m.userData.art = true;
+    m.metalness = skin.fx === 'chameleon' ? 0.9 : 0.4; m.roughness = skin.fx === 'chameleon' ? 0.18 : 0.32;
+    m.emissive.set(0x000000); m.emissiveMap = null; m.emissiveIntensity = 1; m.envMapIntensity = 1.2;
+    applyFx(m, skin.fx);
+  }
   skinMatCache.set(skin.id, m);
   return m;
 }

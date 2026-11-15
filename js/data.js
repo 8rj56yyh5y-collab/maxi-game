@@ -146,6 +146,8 @@ function hash(s) { let h = 2166136261; for (let i = 0; i < s.length; i++) { h ^=
 
 export const SKINS = {};
 import { KNIFE_FINISHES } from './knives.js';
+import { SIGNATURES, COLLECTIONS } from './skinart.js';
+export { COLLECTIONS };
 export { KNIFE_FINISHES };
 // цвета для 2D-превью отделок
 const FINISH_SWATCH = { satin: ['#9aa0a8', '#d8dce0'], mirror: ['#cfd6de', '#ffffff'], black: ['#141518', '#3a3c42'], urban: ['#5a5e64', '#b0b4ba'], night: ['#0d0e14', '#2a2e44'],
@@ -167,6 +169,14 @@ for (const w of allItems) {
     SKINS[id] = { id, weapon: w, name: st.name, rarity, pattern: st.pattern, colors: st.colors, glow: st.glow, theme: st.theme, style: st.key };
   }
 }
+
+// Именные скины (рисунок на всё оружие, у мифических — «живые» эффекты)
+for (const sg of SIGNATURES) {
+  if (!WEAPONS[sg.weapon]) continue;
+  const id = `${sg.weapon}_${sg.key}`;
+  SKINS[id] = { id, weapon: sg.weapon, name: sg.name, rarity: sg.rarity, pattern: 'art', art: sg.art, fx: sg.fx, story: sg.story, theme: sg.theme, style: sg.key, signature: true, colors: ['#888888', '#cccccc'] };
+}
+for (const sk of Object.values(SKINS)) sk.collection = KNIVES[sk.weapon] ? 'blades' : (COLLECTIONS[sk.theme] ? sk.theme : 'base');
 
 export function itemName(w) { return WEAPONS[w] ? WEAPONS[w].name : KNIVES[w] ? KNIVES[w].name : w; }
 export function itemShort(w) { const n = itemName(w); return n.split(' «')[0]; }
@@ -197,6 +207,10 @@ export const CASES = [
     weights: { epic: 48, legendary: 36, mythic: 16 }, knifeChance: 0.03 },
   { id: 'gem',    name: 'Кейс «Самоцветы»', price: 700, currency: 'gold', color: '#7ab4ff', filter: (s) => !!KNIVES[s.weapon] && ['sapphire', 'ruby', 'emerald', 'gold', 'fade', 'marble', 'ocean'].includes(s.finish),
     weights: { mythic: 100 } },
+  { id: 'deep',   name: 'Кейс «Глубина»',  price: 240, currency: 'gold', color: '#00d8c8', filter: (s) => !KNIVES[s.weapon] && (s.theme === 'deep' || ['tsunami', 'goldwave', 'ice', 'navy'].includes(s.style)),
+    weights: { rare: 30, epic: 36, legendary: 24, mythic: 10 }, knifeChance: 0.025, lore: 'deep' },
+  { id: 'north',  name: 'Кейс «Северный фронт»', price: 240, currency: 'gold', color: '#7ae6ff', filter: (s) => !KNIVES[s.weapon] && (s.theme === 'north' || ['arctic', 'ice', 'digiblue', 'urban'].includes(s.style)),
+    weights: { common: 10, rare: 30, epic: 32, legendary: 20, mythic: 8 }, knifeChance: 0.025, lore: 'north' },
   { id: 'blade',  name: 'Кейс «Клинок»',  price: 500, currency: 'gold', color: '#ffb400', filter: (s) => !!KNIVES[s.weapon] && s.weapon !== 'knife',
     weights: { epic: 40, legendary: 42, mythic: 18 } },
 ];

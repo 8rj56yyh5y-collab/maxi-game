@@ -5,10 +5,11 @@ import { Input, BTN_ICONS } from './input.js';
 import { HUD } from './hud.js';
 import { Game } from './game.js';
 import { MAPS, buildMap, prepareMap } from './maps.js';
-import { WEAPONS, KNIVES, GRENADES, CATS, CAT_ORDER, MODES, MAP_INFO, RARITY, RARITY_ORDER, CASES, STORE, levelInfo, itemName, rankOf, rankBadge, SEASON, PASS, PASS_XP, SKINS as ALL_SKINS } from './data.js';
+import { WEAPONS, KNIVES, GRENADES, CATS, CAT_ORDER, MODES, MAP_INFO, RARITY, RARITY_ORDER, CASES, STORE, levelInfo, itemName, rankOf, rankBadge, SEASON, PASS, PASS_XP, SKINS as ALL_SKINS, COLLECTIONS } from './data.js';
 import { DIFFICULTY } from './bots.js';
 import { profile, saveProfile, SKINS, equip, equippedSkin, openCase, buyCase, casePrice, caseContents, sellSkin, ownedKnives, buyStoreItem, dailyAvailable, claimDaily, weaponAvailableFor, passLevel, claimPass } from './skins.js';
 import { skinPreviewURL } from './textures.js';
+import { fxTime } from './skinart.js';
 import { CharacterModel } from './character.js';
 import { buildWeaponModel } from './weapons.js';
 import { setupAtmosphere, followShadow, Pipeline } from './render.js';
@@ -406,7 +407,10 @@ function invInfo() {
   if (!s || !profile.owned.includes(s.id)) { $('inv-info').innerHTML = ''; return; }
   setShowcase(s.weapon, s);
   const eq = profile.equipped[s.weapon] === s.id;
-  $('inv-info').innerHTML = `<div class="card"><div class="wsub" style="color:${RARITY[s.rarity].color}">${RARITY[s.rarity].name}</div><div class="wname">${itemName(s.weapon).split(' «')[0]} | ${s.name}</div>
+  const col = s.collection === 'blades' ? { name: 'Клинки', lore: 'Ножи выпадают редко: из кейсов с особым шансом и из кейса «Самоцветы».' } : COLLECTIONS[s.collection] || COLLECTIONS.base;
+  $('inv-info').innerHTML = `<div class="card inv-card" style="--rc:${RARITY[s.rarity].color}"><div class="wsub" style="color:${RARITY[s.rarity].color}">${RARITY[s.rarity].name}${s.fx ? ' · <span class="live">ЖИВОЙ СКИН</span>' : ''}${s.signature ? ' · ИМЕННОЙ' : ''}</div><div class="wname">${itemName(s.weapon).split(' «')[0]} | ${s.name}</div>
+    <div class="coll"><small>Коллекция</small><b>${col.name}</b></div>
+    ${s.story ? `<p class="story">«${s.story}»</p>` : `<p class="story dim">${col.lore}</p>`}
     <div class="btn-row" style="margin-top:12px"><button class="btn" id="inv-eq">${eq ? 'Снять' : 'Экипировать'}</button><button class="btn danger" id="inv-sell">Продать · ◈ ${RARITY[s.rarity].sell * 10}</button></div></div>`;
   $('inv-eq').onclick = () => { equip(s.weapon, eq ? null : s.id); if (!eq && KNIVES[s.weapon]) profile.knife = s.weapon; saveProfile(); sound.uiClick(); renderInventory(); };
   $('inv-sell').onclick = () => { const v = sellSkin(s.id); toast(`Продано за ◈ ${v}`); invSel = null; renderTopbar(); renderInventory(); };
@@ -428,7 +432,10 @@ function renderCases() {
     const total = Object.values(c.weights).reduce((a, b) => a + b, 0);
     const odds = Object.entries(c.weights).map(([r, w]) => `<span style="color:${RARITY[r].color}">${RARITY[r].name} ${(w / total * 100).toFixed(1)}%</span>`).join(' · ');
     const n = profile.cases[c.id] || 0;
-    return `<div class="case" style="--cc:${c.color}"><div class="box"><div class="crate3d"></div>${n ? `<span class="count">×${n}</span>` : ''}</div><h3>${c.name}</h3>
+    const loreKey = c.lore || (COLLECTIONS[c.id] ? c.id : null);
+    const best = caseContents(c).sort((a, b) => ((b.collection === loreKey) - (a.collection === loreKey)) || ((b.signature ? 1 : 0) - (a.signature ? 1 : 0)) || RARITY_ORDER.indexOf(b.rarity) - RARITY_ORDER.indexOf(a.rarity))[0];
+    const loreTxt = COLLECTIONS[loreKey] && COLLECTIONS[loreKey] !== COLLECTIONS.base ? COLLECTIONS[loreKey].name : '';
+    return `<div class="case" style="--cc:${c.color}"><div class="box">${best ? `<div class="case-hero">${itemPic(best)}</div>` : '<div class="crate3d"></div>'}${n ? `<span class="count">×${n}</span>` : ''}</div><h3>${c.name}</h3>${loreTxt ? `<div class="case-coll">Коллекция «${loreTxt}»</div>` : ''}
       <div class="hint" style="font-size:11px;line-height:1.5">${odds}</div>
       <div class="btn-row"><button class="btn ghost" data-view="${c.id}">Содержимое</button></div>
       <div class="btn-row"><button class="btn ghost" data-buy="${c.id}">Купить · ${pr.cur === 'gold' ? '●' : '◈'} ${pr.amount}</button><button class="btn" data-open="${c.id}" ${n ? '' : 'disabled'}>Открыть</button></div></div>`;
@@ -439,13 +446,16 @@ function renderCases() {
     const c = CASES.find(x => x.id === b.dataset.view);
     const items = caseContents(c).sort((a, b) => RARITY_ORDER.indexOf(b.rarity) - RARITY_ORDER.indexOf(a.rarity));
     $('modal-title').textContent = c.name;
-    $('modal-body').innerHTML = `<div class="skin-grid">${items.map(skinCard).join('')}</div>`;
+    items.sort((a, b) => (b.signature ? 1 : 0) - (a.signature ? 1 : 0));
+    const lk = c.lore || (COLLECTIONS[c.id] ? c.id : null);
+    const col = COLLECTIONS[lk];
+    $('modal-body').innerHTML = `${col && lk !== 'base' ? `<div class="case-lore"><b>${col.name}</b><p>${col.lore}</p></div>` : ''}<div class="skin-grid">${items.map(skinCard).join('')}</div>`;
     $('modal').classList.remove('hidden');
   });
 }
 $('modal-close').onclick = () => $('modal').classList.add('hidden');
 function skinCard(s) {
-  return `<div class="skin" style="--rc:${RARITY[s.rarity].color}">${itemPic(s)}<div class="nm">${s.name}</div><div class="rr" style="color:${RARITY[s.rarity].color}">${itemName(s.weapon).split(' «')[0]}</div></div>`;
+  return `<div class="skin ${s.signature ? 'sig' : ''}" style="--rc:${RARITY[s.rarity].color}" ${s.story ? `title="${s.story.replace(/"/g, '&quot;')}"` : ''}>${s.fx ? '<span class="live-tag">ЖИВОЙ</span>' : ''}${itemPic(s)}<div class="nm">${s.name}</div><div class="rr" style="color:${RARITY[s.rarity].color}">${itemName(s.weapon).split(' «')[0]}</div></div>`;
 }
 let lastOpened = null;
 function startCaseOpen(c) {
@@ -887,6 +897,7 @@ let last = performance.now(), lastFrame = 0, fpsAcc = 0, fpsN = 0, fps = 0;
 const hzSamples = [];
 function frame(now) {
   requestAnimationFrame(frame);
+  fxTime.value = now / 1000;
   if (hzSamples.length < 90) { hzSamples.push(now); if (hzSamples.length === 90) { const d = (hzSamples[89] - hzSamples[10]) / 79; refreshHz = Math.round(1000 / d / 5) * 5 || 60; } }
   const cap = settings.fpsCap | 0;
   if (cap > 0) {

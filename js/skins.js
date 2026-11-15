@@ -39,6 +39,14 @@ if (!profile.starterV3) {
   profile.starterV3 = true;
   try { localStorage.setItem(KEY, JSON.stringify(profile)); } catch (e) { /* ignore */ }
 }
+if (!profile.starterV4) {
+  for (const id of ['ak_phoenix', 'br17_chameleon', 'p9_hologram']) if (SKINS[id] && !profile.owned.includes(id)) profile.owned.push(id);
+  if (SKINS.ak_phoenix) profile.equipped.ak = 'ak_phoenix';
+  if (SKINS.p9_hologram) profile.equipped.p9 = 'p9_hologram';
+  profile.cases = { ...profile.cases, deep: (profile.cases.deep || 0) + 1, north: (profile.cases.north || 0) + 1, elements: (profile.cases.elements || 0) + 1 };
+  profile.starterV4 = true;
+  try { localStorage.setItem(KEY, JSON.stringify(profile)); } catch (e) { /* ignore */ }
+}
 
 export function saveProfile() {
   try { localStorage.setItem(KEY, JSON.stringify(profile)); } catch (e) { /* ignore */ }
