@@ -124,7 +124,7 @@ function setLobbyMode(mode) {
 
 // ---------- Живой фон: выбранная карта ----------
 const lobbyMap = { scene: null, id: null, cam: new THREE.PerspectiveCamera(42, innerWidth / innerHeight, 0.05, 1000), building: null };
-const LOBBY_SPOT = { oasis: [-24, -1], port: [0, -28], tokyo: [-24, 0.5], oldtown: [-22, 0], brooklyn: [-24, 5.4], santorini: [-24, 0], paris: [-24, 0], kyoto: [-24, 0], miami: [-24, 0] };
+const LOBBY_SPOT = { oasis: [-24, -1], port: [0, -28], tokyo: [-24, 0.5], oldtown: [-22, 0], brooklyn: [-24, 5.4], santorini: [-24, 0], paris: [-24, 0], kyoto: [-24, 0], miami: [-24, 0], amsterdam: [-24, 0], hongkong: [-24, 0.5] };
 async function setLobbyMap(id) {
   if (lobbyMap.id === id) return;
   if (lobbyMap.building) { lobbyMap.pending = id; return; }
@@ -859,11 +859,7 @@ async function boot() {
   buildWeaponIcons(renderer);
   lt.textContent = 'Подготовка лобби…'; lf.style.width = '78%';
   await buildLobby();
-  for (const id of Object.keys(MAPS)) {
-    lt.textContent = `Карта «${MAPS[id].name}»…`; lf.style.width = (id === 'oasis' ? 85 : 95) + '%';
-    await nextFrame();
-    try { await renderMapThumb(id); } catch (e) { console.error(e); }
-  }
+  try { Object.assign(mapThumbs, JSON.parse(localStorage.getItem(THUMB_KEY) || '{}')); } catch (e) { /* ignore */ }
   lf.style.width = '100%';
   if (settings.match.side && settings.match.side !== 'auto') setLobbyTeam(settings.match.side);
   lt.textContent = 'Подготовка лобби…';
@@ -872,6 +868,21 @@ async function boot() {
   $('loading').classList.add('hidden');
   if (dailyAvailable()) setTimeout(() => toast('Доступна ежедневная награда — загляните в магазин'), 1200);
   requestAnimationFrame(frame);
+  setTimeout(fillThumbs, 1500);
+}
+
+// Превью карт догружаются в фоне и кэшируются
+const THUMB_KEY = 'maxi_thumbs_v3';
+async function fillThumbs() {
+  for (const id of Object.keys(MAPS)) {
+    if (mapThumbs[id]) continue;
+    while (game) await new Promise(r => setTimeout(r, 2000));
+    try { await renderMapThumb(id); } catch (e) { console.error(e); continue; }
+    try { localStorage.setItem(THUMB_KEY, JSON.stringify(mapThumbs)); } catch (e) { /* ignore */ }
+    const card = document.querySelector(`.map-card[data-map="${id}"] .thumb`);
+    if (card && card.tagName !== 'IMG') { const img = document.createElement('img'); img.className = 'thumb'; img.src = mapThumbs[id]; card.replaceWith(img); }
+    await new Promise(r => setTimeout(r, 400));
+  }
 }
 boot().catch(e => { console.error(e); $('load-text').textContent = 'Ошибка загрузки: ' + e.message; });
 

@@ -194,6 +194,13 @@ export class ViewModel {
     this.scene.add(this.body.root);
     this.body.model.updateMatrixWorld(true);
     this.eyeY = B.head.getWorldPosition(new THREE.Vector3()).y + 0.06;
+    // удлиняем руки (кисти остаются прежнего размера), чтобы дотягиваться до цевья
+    const K = 1.15;
+    this.armK = K;
+    B.lSh = this.body.model.getObjectByName('mixamorigLeftShoulder');
+    B.rSh = this.body.model.getObjectByName('mixamorigRightShoulder');
+    this.shRest = [B.lSh && B.lSh.position.clone(), B.rSh && B.rSh.position.clone()];
+    this.armLen = { ua: this.body.len.ua * K, fa: this.body.len.fa * K };
   }
 
   poseBody(dt, scoped) {
@@ -202,21 +209,31 @@ export class ViewModel {
     ch.root.visible = !scoped && this.holder.visible;
     if (!ch.root.visible) return;
     ch.mixer.update(dt * 0.6);
+    for (const [a, h] of [[B.lArm, B.lHand], [B.rArm, B.rHand]]) { a.scale.setScalar(this.armK); h.scale.setScalar(1 / this.armK); }
     ch.root.position.set(0.02, -this.eyeY - 0.1, 0.32);
     ch.root.rotation.set(0, 0, 0);
+    ch.root.updateMatrixWorld(true);
+    // плечи выносим вперёд-вниз (торс остаётся за камерой)
+    const offs = [[0.07, -0.16, -0.4], [-0.01, -0.1, -0.16]];
+    [B.lSh, B.rSh].forEach((sh, i) => {
+      if (!sh) return;
+      sh.position.copy(this.shRest[i]); sh.updateMatrixWorld(true);
+      const w = sh.getWorldPosition(new THREE.Vector3()).add(new THREE.Vector3(...offs[i]));
+      sh.position.copy(sh.parent.worldToLocal(w));
+    });
     ch.root.updateMatrixWorld(true);
     this.gun.updateMatrixWorld(true);
     const ud = this.ud;
     const tR = this.gun.localToWorld(ud.gripR.clone());
     const right = new THREE.Vector3(1, 0, 0);
-    solveIK(B.rArm, B.rFore, B.rHand, tR, new THREE.Vector3(0.7, -1, 0.3), ch.len.ua, ch.len.fa);
+    solveIK(B.rArm, B.rFore, B.rHand, tR, new THREE.Vector3(0.7, -1, 0.3), this.armLen.ua, this.armLen.fa);
     const gq = this.gun.getWorldQuaternion(new THREE.Quaternion());
     const gLeft = new THREE.Vector3(-1, 0, 0).applyQuaternion(gq), gDown = new THREE.Vector3(0, -1, 0).applyQuaternion(gq), gFwd = new THREE.Vector3(0, 0, -1).applyQuaternion(gq);
     aimBone(B.rHand, B.rFing.getWorldPosition(new THREE.Vector3()), tR.clone().addScaledVector(gLeft, 0.1).addScaledVector(gDown, 0.05).addScaledVector(gFwd, 0.03));
     let tL;
     if (ud.gripL) tL = this.gun.localToWorld(ud.gripL.clone()).add(this.leftOffset);
     else tL = new THREE.Vector3(-0.32, -0.55, -0.05);
-    solveIK(B.lArm, B.lFore, B.lHand, tL, new THREE.Vector3(-0.8, -1, 0.2), ch.len.ua, ch.len.fa);
+    solveIK(B.lArm, B.lFore, B.lHand, tL, new THREE.Vector3(-0.8, -1, 0.2), this.armLen.ua, this.armLen.fa);
     if (ud.gripL) aimBone(B.lHand, B.lFing.getWorldPosition(new THREE.Vector3()), tL.clone().addScaledVector(gLeft, -0.1).addScaledVector(gFwd, 0.04));
     void right;
   }

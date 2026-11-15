@@ -2,7 +2,7 @@
 import * as THREE from 'three';
 import {
   cityBuilding, road, sidewalk, streetLamp, tree, car, vending, powerPole, wires, lanternString, torii, stoneLantern,
-  bench, umbrellaTable, fountain, bunting, billboard, hydrant, dumpster, facade, fbox, palmTree,
+  bench, umbrellaTable, fountain, bunting, billboard, hydrant, dumpster, facade, fbox, palmTree, bicycle,
 } from './city.js';
 
 const BOUNDS = [-40, -30, 40, 30];
@@ -215,20 +215,36 @@ function buildSantorini(B, group, ctx) {
 
 // =============== ПАРИЖ ===============
 function eiffel(B, x, z, s) {
-  const lvl = [[0, 9, 2.6], [2.6, 5.2, 5.6], [5.6, 2.4, 9.2], [9.2, 1.1, 14.5], [14.5, 0.25, 16.5]];
-  for (const [y0, w0, y1] of lvl) {
-    const w1 = w0 * (y1 >= 14.5 ? 0.25 : 0.62);
-    for (const [sx, sz] of [[-1, -1], [1, -1], [1, 1], [-1, 1]]) {
-      const a = new THREE.Vector3(x + sx * w0 * s, y0 * s, z + sz * w0 * s), b = new THREE.Vector3(x + sx * w1 * s, y1 * s, z + sz * w1 * s);
-      const len = a.distanceTo(b), g = new THREE.BoxGeometry(0.9 * s * (w0 / 9 + 0.15), len, 0.9 * s * (w0 / 9 + 0.15));
-      g.applyQuaternion(new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), b.clone().sub(a).normalize()));
-      g.translate((a.x + b.x) / 2, (a.y + b.y) / 2, (a.z + b.z) / 2); B.push('flat|5a4a3a|0.7|0.5', g);
+  const M = 'flat|3e342c|0.75|0.45';
+  // полуширина силуэта в зависимости от высоты (в единицах s)
+  const prof = [[0, 9], [2.6, 5.4], [5.6, 2.6], [9.2, 1.2], [14.5, 0.35], [16.4, 0.12]];
+  const W = (y) => { for (let i = 1; i < prof.length; i++) if (y <= prof[i][0]) { const [y0, w0] = prof[i - 1], [y1, w1] = prof[i]; return w0 + (w1 - w0) * (y - y0) / (y1 - y0); } return 0.1; };
+  const bar = (a, b, t) => {
+    const A = new THREE.Vector3(...a), Bv = new THREE.Vector3(...b), len = A.distanceTo(Bv);
+    const g = new THREE.BoxGeometry(t, len, t);
+    g.applyQuaternion(new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), Bv.clone().sub(A).normalize()));
+    g.translate((A.x + Bv.x) / 2, (A.y + Bv.y) / 2, (A.z + Bv.z) / 2); B.push(M, g);
+  };
+  const C = [[-1, -1], [1, -1], [1, 1], [-1, 1]];
+  const P = (y, c, inset = 0) => [x + C[c][0] * (W(y) - inset) * s, y * s, z + C[c][1] * (W(y) - inset) * s];
+  const steps = 26;
+  for (let k = 0; k < steps; k++) {
+    const y0 = 16.4 * k / steps, y1 = 16.4 * (k + 1) / steps, th = Math.max(0.12, W(y0) * 0.09) * s;
+    for (let c = 0; c < 4; c++) {
+      bar(P(y0, c), P(y1, c), th);                                          // ноги
+      if (y0 < 13) {
+        const n = (c + 1) % 4, w = th * 0.35;
+        bar(P(y0, c), P(y1, n), w); bar(P(y0, n), P(y1, c), w);             // раскосы
+        bar(P(y1, c), P(y1, n), w);                                         // пояса
+      }
     }
-    if (y1 < 14) B.box(x - w1 * s * 1.15, y1 * s - 0.3 * s, z - w1 * s * 1.15, x + w1 * s * 1.15, y1 * s, z + w1 * s * 1.15, 'flat|5a4a3a|0.7|0.5');
   }
-  const ar = new THREE.TorusGeometry(5.2 * s, 0.35 * s, 6, 24, Math.PI); ar.translate(x, 0, z - 7 * s); B.push('flat|5a4a3a|0.7|0.5', ar);
-  const ar2 = ar.clone(); ar2.translate(0, 0, 14 * s); B.push('flat|5a4a3a|0.7|0.5', ar2);
-  const tip = new THREE.SphereGeometry(0.5 * s, 8, 6); tip.translate(x, 16.6 * s, z); B.push('glowc|fff0c0|6', tip);
+  for (const y of [2.6, 5.6, 9.2]) B.box(x - W(y) * s * 1.12, y * s - 0.25 * s, z - W(y) * s * 1.12, x + W(y) * s * 1.12, y * s + 0.05 * s, z + W(y) * s * 1.12, M);
+  // арки первого яруса
+  for (const [ry, ox, oz] of [[0, 0, -1], [0, 0, 1], [Math.PI / 2, -1, 0], [Math.PI / 2, 1, 0]]) {
+    const ar = new THREE.TorusGeometry(4.6 * s, 0.22 * s, 6, 24, Math.PI); ar.scale(1, 0.48, 1); ar.rotateY(ry); ar.translate(x + ox * 6.6 * s, 0, z + oz * 6.6 * s); B.push(M, ar);
+  }
+  const tip = new THREE.SphereGeometry(0.12 * s, 8, 6); tip.translate(x, 16.5 * s, z); B.push('glowc|ff4030|3', tip);
 }
 function buildParis(B, group, ctx) {
   const R = ctx.R;
@@ -238,7 +254,7 @@ function buildParis(B, group, ctx) {
     [-40, 22, -32, 30, 15, 'bld:paris'], [32, 22, 40, 30, 15, 'bld:paris'], [-40, -30, -33, -22, 14, 'bld:paris'], [33, -30, 40, -22, 14, 'bld:paris'],
   ];
   placeBuildings(B, [...inner, ...perimeterBuildings('paris', R, 15, 19)], ctx);
-  eiffel(B, -30, 150, 9);
+  eiffel(B, -24, 120, 11);
   skyline(B, R, 30, 14, 26, 90);
   // бульвар с платанами
   road(B, -40, -3.4, 40, 3.4, ctx, { zebra: -10 });
@@ -347,6 +363,81 @@ function buildMiami(B, group, ctx) {
   const sea = new THREE.PlaneGeometry(900, 400); sea.rotateX(-Math.PI / 2); sea.translate(0, -0.15, -230); B.push('water', sea);
 }
 
+// =============== АМСТЕРДАМ ===============
+function buildAmsterdam(B, group, ctx) {
+  const R = ctx.R;
+  const inner = [];
+  const row = (z1, z2, from, to, gaps, hMin, hMax) => { let a = from; for (const [g0, g1] of [...gaps, [to, to]]) { while (a < g0 - 2) { const w = Math.min(g0 - a, 4 + R() * 2.5); inner.push([a, z1, a + w, z2, hMin + R() * (hMax - hMin), 'bld:dutch']); a += w; } a = g1; } };
+  row(7, 15, -27, 27, [[-12, -8], [8, 12]], 10, 15);
+  row(-15, -7, -27, 27, [[-13, -8], [8, 13]], 10, 15);
+  inner.push([-40, 22, -32, 30, 12, 'bld:dutch'], [32, 22, 40, 30, 12, 'bld:dutch'], [-40, -30, -33, -24, 11, 'bld:dutch'], [33, -30, 40, -24, 11, 'bld:dutch']);
+  placeBuildings(B, [...inner, ...perimeterBuildings('dutch', R, 11, 16, { skipNorth: true })], ctx);
+  B.box(-40, 0, -30, 40, 0.02, 30, 'T|bricks|8a6a5a|1.4');
+  B.box(-40, 0.02, -2.6, 40, 0.04, 2.6, 'T|asphalt2|7a7c80|4');
+  // велосипеды повсюду
+  for (let x = -34; x <= 34; x += 2.2) { if (Math.abs(x) < 4 || R() < 0.35) continue; bicycle(B, x, 5.6, Math.PI / 2 + (R() - 0.5) * 0.3); }
+  for (let x = -30; x <= 30; x += 2.6) { if (R() < 0.5) continue; bicycle(B, x, -5.6, Math.PI / 2 + (R() - 0.5) * 0.3); }
+  for (const [x, z] of [[-20, 0.5], [6, -0.8]]) car(B, x, z, 0, ctx, 'kei');
+  for (const x of [-30, -14, 2, 18, 32]) streetLamp(B, x, 4.2, ctx, 'euro');
+  for (const [x, z] of [[-24, -5.8], [-4, -5.8], [16, -5.8]]) tree(B, x, z, ctx, 'green', 0.9);
+  // площадь (юг) с цветочным рынком
+  for (const [x, z, c] of [[-22, -20, 'cloth'], [-12, -24, 'cloth_g'], [12, -20, 'cloth_b'], [22, -24, 'cloth']]) umbrellaTable(B, x, z, c, ctx);
+  for (const [x1, z1, x2, z2] of [[-6, -22, -2, -20.5], [2, -26, 6, -24.5], [-28, -27, -26.5, -23], [26.5, -19, 28, -15.5]]) { B.box(x1, 0, z1, x2, 0.9, z2, 'T|wood3|7a5a3a|1.5', true); B.box(x1 + 0.1, 0.9, z1 + 0.1, x2 - 0.1, 1.1, z2 - 0.1, 'leaf|e83a5a'); }
+  for (const x of [-30, 0, 30]) streetLamp(B, x, -16, ctx, 'euro');
+  // набережная канала (север) и плавучие дома
+  B.box(-40, 0, 29.4, 40, 1.0, 30, 'iron', true);
+  B.colliders.push({ min: [-40, 0, 29.4], max: [40, 3, 31] });
+  for (let x = -36; x <= 36; x += 6) { const p = new THREE.CylinderGeometry(0.08, 0.08, 1.0, 6); p.translate(x, 0.5, 29.7); B.push('iron', p); }
+  const water = new THREE.PlaneGeometry(160, 26); water.rotateX(-Math.PI / 2); water.translate(0, -0.9, 43); B.push('water', water);
+  B.box(-80, -2, 30, 80, -1.0, 31, 'T|bricks|6a4a3a|2');
+  B.box(-80, -2, 55, 80, -1.0, 56, 'T|bricks|6a4a3a|2');
+  for (const [x, c] of [[-24, '2e5a3a'], [-6, '1f3f6b'], [14, '8e1f22'], [30, '3a3a40']]) {
+    B.box(x - 5, -1.0, 34, x + 5, 0.2, 37.4, 'paint|' + c);
+    B.box(x - 4, 0.2, 34.4, x + 3, 2.2, 37, 'T|wood3|c8b090|1.5');
+    for (let k = -3; k < 3; k += 1.4) B.box(x + k, 0.9, 34.36, x + k + 0.8, 1.6, 34.4, 'glass');
+  }
+  // дома за каналом
+  for (let x = -70; x < 70; x += 5 + R() * 2) { const h = 10 + R() * 6, col = ['T|bricks|7a3a2a|2', 'T|bricks|5a3226|2', 'T|bricks|8a5038|2', 'T|plaster|f3e7cf|3.5'][Math.floor(R() * 4)]; B.box(x, -1, 56, x + 4.8, h, 64, col); const s = new THREE.Shape(); s.moveTo(0, 0); s.lineTo(4.8, 0); s.lineTo(2.4, 2.6); s.closePath(); const g = new THREE.ExtrudeGeometry(s, { depth: 0.3, bevelEnabled: false }); g.translate(x, h, 55.8); B.push(col, g); for (let fy = 1.5; fy < h - 1; fy += 3) for (const fx of [0.8, 2.9]) B.box(x + fx, fy, 55.9, x + fx + 1.1, fy + 1.6, 56, 'glass'); }
+  // мостик-силуэт
+  const ar = new THREE.TorusGeometry(5, 0.6, 6, 20, Math.PI); ar.scale(1, 0.4, 1); ar.translate(52, -1, 44); ar.rotateY(0); B.push('T|bricks|7a5a4a|2', ar);
+}
+
+// =============== ГОНКОНГ ===============
+function buildHongKong(B, group, ctx) {
+  const R = ctx.R;
+  const inner = [
+    [-27, 7, -12, 15, 28, 'bld:hk'], [-8, 7, 8, 15, 36, 'bld:hk'], [12, 7, 27, 15, 26, 'bld:hk'],
+    [-27, -15, -13, -7, 24, 'bld:hk'], [-8, -15, 8, -7, 32, 'bld:hk'], [13, -15, 27, -7, 22, 'bld:hk'],
+    [-40, -30, -32, -22, 18, 'bld:hk'], [32, 22, 40, 30, 18, 'bld:hk'], [-40, 22, -33, 30, 20, 'bld:hk'], [33, -30, 40, -22, 20, 'bld:hk'],
+  ];
+  placeBuildings(B, [...inner, ...perimeterBuildings('hk', R, 22, 46)], ctx);
+  skyline(B, R, 60, 60, 180, 85);
+  road(B, -40, -3.6, 40, 3.6, ctx, { zebra: -10 });
+  road(B, -40, -3.6, 40, 3.6, ctx, { zebra: 10 });
+  sidewalk(B, -40, 3.6, 40, 7); sidewalk(B, -40, -7, 40, -3.6);
+  for (const [x, z, ry, k] of [[-24, 2, 0, 'taxiHK'], [-12, -2.1, Math.PI, 'taxiHK'], [2, 2.1, 0, 'van'], [16, -2, Math.PI, 'taxiHK'], [28, 2.1, 0, 'taxiHK']]) car(B, x, z, ry, ctx, k);
+  // трамвай «дин-дин»
+  B.box(-6, 0.3, -3.2, 3, 3.0, -0.9, 'paint|2a7a4a', true); B.box(-6, 3.0, -3.2, 3, 5.4, -0.9, 'paint|e8e0c8', true);
+  for (let k = -5.5; k < 2.5; k += 1.2) { B.box(k, 3.4, -3.22, k + 0.9, 4.6, -3.18, 'glass'); B.box(k, 3.4, -0.92, k + 0.9, 4.6, -0.88, 'glass'); }
+  B.box(-6.2, 5.4, -3.3, 3.2, 5.55, -0.8, 'paint|2a7a4a');
+  // бамбуковые леса на одном доме
+  for (let x = -7.5; x <= 7.5; x += 1.2) { const p = new THREE.CylinderGeometry(0.04, 0.04, 20, 5); p.translate(x, 10, 6.6); B.push('T|wood3|c8a868|1.5', p); }
+  for (let y = 2; y <= 20; y += 2) B.box(-7.6, y, 6.58, 7.6, y + 0.06, 6.64, 'T|wood3|c8a868|1.5');
+  for (const x of [-26, -2, 22]) streetLamp(B, x, -4.2, ctx, 'modern', 0);
+  for (const x of [-14, 10, 34]) streetLamp(B, x, 4.2, ctx, 'modern', Math.PI);
+  // рынок (север): палатки и фонари
+  for (let x = -34; x <= 34; x += 5) lanternString(B, [x, 4.6, 15], [x + 1.5, 4.8, 30], 8, ctx);
+  for (const [x, z, c] of [[-24, 20, 'cloth'], [-18, 26, 'cloth_g'], [-6, 21, 'cloth_b'], [6, 26, 'cloth'], [18, 20, 'cloth_g'], [26, 26, 'cloth_b']]) { B.box(x - 1.4, 0, z - 0.8, x + 1.4, 0.95, z + 0.8, 'T|wood3|7a5a3a|1.5', true); umbrellaTable(B, x + 2.2, z, c, ctx); }
+  for (const x of [-30, 0, 30]) streetLamp(B, x, 29, ctx, 'modern', Math.PI);
+  // двор (юг): кондиционеры, ящики, мусорки
+  for (const [x, z, ry] of [[-20, -18, 0], [6, -28.4, 0], [24, -18, 0]]) dumpster(B, x, z, ry);
+  for (const [x, z] of [[-28, -24], [-10, -20], [0, -26], [14, -22], [30, -26]]) B.box(x - 0.6, 0, z - 0.6, x + 0.6, 1.2, z + 0.6, 'T|wood|a08060|1', true);
+  for (const x of [-30, 0, 30]) streetLamp(B, x, -16.5, ctx, 'modern', 0);
+  billboard(B, 0, 39, 7.4, 0, 14, 6, 0);
+  billboard(B, -20, 28, -15.4, 0, 10, 4.5, 2);
+  billboard(B, 20, 25, 15.4, Math.PI, 10, 4.5, 1);
+}
+
 const common = { bounds: BOUNDS, spawns: SPAWNS, points: POINTS, boxes: [], decor: [], paths: [] };
 
 export const CITY_MAPS = {
@@ -391,5 +482,17 @@ export const CITY_MAPS = {
     sky: { elevation: 30, azimuth: 200, turbidity: 2, rayleigh: 0.5, mie: 0.003, exposure: 0.85 },
     sun: 0xa0b0ff, sunI: 0.6, hemi: [0x5a3a8a, 0x201030, 0.65], fog: [0x2a1840, 0.01], hdri: 'moonless_golf_1k', envI: 0.6,
     sites: { A: [-20, 22, 5], B: [-20, -20, 5] }, lightCount: 6,
+  },
+  amsterdam: {
+    ...common, id: 'amsterdam', name: 'Амстердам', desc: 'Каналы, велосипеды, узкие дома', build: buildAmsterdam, ground: 'T|bricks|8a6a5a|1.4',
+    sky: { elevation: 35, azimuth: 140, turbidity: 6, rayleigh: 1.6, mie: 0.008, exposure: 0.45 },
+    sun: 0xfff2dc, sunI: 2.8, hemi: [0xc0d0e8, 0x705a48, 0.5], fog: [0xc8d0d8, 0.006], hdri: 'quarry_01_1k', envI: 0.75,
+    sites: { A: [-20, 22, 5], B: [-20, -21, 5] },
+  },
+  hongkong: {
+    ...common, id: 'hongkong', name: 'Гонконг', desc: 'Ночной Монгкок: высотки, трамвай, рынок', build: buildHongKong, night: true, ground: 'T|asphalt2|6a6c70|4|0.4',
+    sky: { elevation: 30, azimuth: 200, turbidity: 2, rayleigh: 0.5, mie: 0.003, exposure: 0.85 },
+    sun: 0x8fa8ff, sunI: 0.5, hemi: [0x3a3a6a, 0x1a1020, 0.6], fog: [0x201830, 0.011], hdri: 'moonless_golf_1k', envI: 0.6,
+    sites: { A: [-20, 22, 5], B: [-20, -21, 5] }, lightCount: 6,
   },
 };

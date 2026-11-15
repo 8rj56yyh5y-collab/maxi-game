@@ -198,6 +198,8 @@ export const MAP_INFO = {
   paris: { name: 'Париж', desc: 'Бульвар с кафе на закате.', modes: ['defuse', 'tdm', 'ffa', 'gungame'] },
   kyoto: { name: 'Киото', desc: 'Гион, пагода, осенний сад.', modes: ['defuse', 'tdm', 'ffa', 'gungame'] },
   miami: { name: 'Майами', desc: 'Ночной Оушен-драйв.', modes: ['defuse', 'tdm', 'ffa', 'gungame'] },
+  amsterdam: { name: 'Амстердам', desc: 'Каналы и велосипеды.', modes: ['defuse', 'tdm', 'ffa', 'gungame'] },
+  hongkong: { name: 'Гонконг', desc: 'Ночной Монгкок.', modes: ['defuse', 'tdm', 'ffa', 'gungame'] },
 };
 
 // ---------- Рейтинговые игры ----------

@@ -210,7 +210,8 @@ export function cityTile(key) {
   return 1;
 }
 export function cityMaterial(key, night) {
-  if (cache[key]) return cache[key];
+  const ck = key + (night ? '#n' : '');
+  if (cache[ck]) return cache[ck];
   const std = (o) => new THREE.MeshStandardMaterial(o);
   let m = null;
   if (key.startsWith('T|')) {
@@ -250,7 +251,7 @@ export function cityMaterial(key, night) {
     case 'iron': m = std({ color: 0x1b1d20, metalness: 0.7, roughness: 0.45 }); break;
     case 'skyline': { const t = skylineTex(); m = std({ map: t, emissiveMap: t, emissive: 0xffffff, emissiveIntensity: night ? 1.1 : 0.05, color: night ? 0x303540 : 0x9aa4b0, roughness: 0.6, metalness: 0.3 }); break; }
   }
-  if (m) cache[key] = m;
+  if (m) cache[ck] = m;
   return m;
 }
 export function resetCityMaterials() { for (const k of Object.keys(cache)) delete cache[k]; }
@@ -293,7 +294,7 @@ function fplane(B, f, a, y, o, w, h, mat, uv = [0, 0, 1, 1], blade = false) {
 const hCell = (i) => { i = ((i % 32) + 32) % 32; const c = i % 4, r = Math.floor(i / 4); return [c / 4, 1 - (r + 1) / 8, (c + 1) / 4, 1 - r / 8]; };
 const vCell = (i) => { i = ((i % 16) + 16) % 16; const c = i % 8, r = Math.floor(i / 8); return [c / 8, 1 - (r + 1) / 2, (c + 1) / 8, 1 - r / 2]; };
 const SIGNS_ = { tokyo: [0, 1, 2, 3, 4, 5, 16, 17, 18, 20, 30, 6, 7, 11], euro: [8, 9, 10, 14, 21, 22, 24, 28, 29, 31, 7, 6, 13], ny: [12, 11, 13, 15, 21, 22, 23, 25, 26, 27, 9, 14, 29, 6, 7] };
-const SIGNS = { ...SIGNS_, paris: SIGNS_.euro, kyoto: SIGNS_.tokyo, miami: SIGNS_.ny, santorini: SIGNS_.euro };
+const SIGNS = { ...SIGNS_, dutch: SIGNS_.euro, hk: SIGNS_.tokyo, paris: SIGNS_.euro, kyoto: SIGNS_.tokyo, miami: SIGNS_.ny, santorini: SIGNS_.euro };
 const winCell = (i) => [(i % 4) / 4, 0, (i % 4 + 1) / 4, 1];
 
 // ---------- Стили домов ----------
@@ -301,7 +302,9 @@ export const STYLES = {
   tokyo: { floor: 3.1, walls: ['T|plaster2|d9d6cf|3', 'T|concrete2|c8c4ba|4', 'T|plaster3|e8e2d4|3', 'T|concrete|b5b0a6|3', 'T|metal2|c2c6cc|3'], trim: 'T|concrete|8a8780|3', roof: 'flat', night: true },
   euro: { floor: 3.2, walls: ['T|plaster|f2d79c|3.5', 'T|plaster|f0c0a8|3.5', 'T|plaster|c8dbe8|3.5', 'T|plaster|f3e7cf|3.5', 'T|plaster|d9e6c4|3.5', 'T|plaster3|e8c48a|3.5'], trim: 'T|plaster2|f6f1e6|3', roof: 'gable' },
   ny: { floor: 3.4, walls: ['T|bricks|b8836c|2.2', 'T|bricks3|c9907a|2.2', 'T|bricks|8f5a46|2.2', 'T|concrete3|d6c9b0|3'], trim: 'T|concrete3|e2d8c4|3', roof: 'flat' },
+  dutch: { floor: 3.0, walls: ['T|bricks|7a3a2a|2', 'T|bricks|5a3226|2', 'T|bricks|8a5038|2', 'T|bricks|3e2a24|2', 'T|plaster|f3e7cf|3.5'], trim: 'T|plaster2|f6f1e6|3', roof: 'gable' },
   paris: { floor: 3.3, walls: ['T|concrete3|f0e4c8|3', 'T|plaster2|ece0c4|3', 'T|concrete3|e8dcc0|3'], trim: 'T|concrete3|f6ecd8|3', roof: 'mansard' },
+  hk: { floor: 3.0, walls: ['T|concrete3|b8b0a0|3', 'T|plaster2|d8d0c0|3', 'T|concrete3|9a9488|3', 'T|plaster2|c8d0c8|3'], trim: 'T|concrete3|8a8478|3', roof: 'flat' },
   kyoto: { floor: 3.0, walls: ['T|wood3|6a4528|1.5', 'T|plaster2|e9e2cf|3', 'T|wood3|5a3a22|1.5'], trim: 'T|wood3|3a2616|1.5', roof: 'gableJp' },
   miami: { floor: 3.2, walls: ['T|plaster2|f7c6d9|3', 'T|plaster2|bfe8dc|3', 'T|plaster2|fde8b0|3', 'T|plaster2|c8d8f8|3', 'T|plaster2|fbd2b8|3'], trim: 'T|plaster2|ffffff|3', roof: 'flat' },
   santorini: { floor: 3.0, walls: ['T|plaster2|ffffff|3', 'T|plaster2|fbfaf6|3', 'T|plaster3|ffffff|3', 'T|plaster3|f6dcc0|3', 'T|plaster2|f9eac8|3'], trim: 'T|plaster2|ffffff|3', roof: 'flatRound' },
@@ -332,7 +335,7 @@ export function cityBuilding(B, b, ctx) {
     B.box(x1 - 0.12, y0 + h - 0.05, z1 - 0.12, x2 + 0.12, y0 + h + 0.35, z2 + 0.12, pt);
     B.colliders.push({ min: [x1, y0 + h, z1], max: [x2, y0 + h + 0.35, z2] });
     if (style === 'ny' && R() < 0.6 && h > 9) waterTower(B, x1 + 2 + R() * (x2 - x1 - 4), y0 + h + 0.35, z1 + 2 + R() * (z2 - z1 - 4));
-    if (style === 'tokyo' || style === 'ny') for (let i = 0; i < 2; i++) { const ax = x1 + 1 + R() * Math.max(0.1, x2 - x1 - 3), az = z1 + 1 + R() * Math.max(0.1, z2 - z1 - 3); B.box(ax, y0 + h + 0.35, az, ax + 1.2, y0 + h + 1.2, az + 0.8, 'flat|9aa0a6|0.5|0.5'); }
+    if (style === 'tokyo' || style === 'ny' || style === 'hk') for (let i = 0; i < 2; i++) { const ax = x1 + 1 + R() * Math.max(0.1, x2 - x1 - 3), az = z1 + 1 + R() * Math.max(0.1, z2 - z1 - 3); B.box(ax, y0 + h + 0.35, az, ax + 1.2, y0 + h + 1.2, az + 0.8, 'flat|9aa0a6|0.5|0.5'); }
     if (style === 'santorini' && R() < 0.45) dome(B, (x1 + x2) / 2, y0 + h + 0.35, (z1 + z2) / 2, Math.min(x2 - x1, z2 - z1) * 0.3);
   }
   // фасады
@@ -351,10 +354,10 @@ export function cityBuilding(B, b, ctx) {
         cityWindow(B, f, c, yb + 0.9, style, ctx);
       }
       if (style === 'ny' && side % 2 === 0 && fl >= 1 && f.len > 7 && ctx.fireEscape !== false) fireEscape(B, f, step * 1.0, yb, step * 1.4);
-      if (style === 'tokyo' && R() < 0.35) fbox(B, f, 0.3, f.len - 0.3, yb + 0.05, yb + 0.12, 0, 0.9, 'flat|c8ccd0|0.5|0.4'), fbox(B, f, 0.3, f.len - 0.3, yb + 0.12, yb + 1.0, 0.85, 0.9, 'flat|d0d4d8|0.6|0.3');
+      if ((style === 'tokyo' || style === 'hk') && R() < 0.35) fbox(B, f, 0.3, f.len - 0.3, yb + 0.05, yb + 0.12, 0, 0.9, 'flat|c8ccd0|0.5|0.4'), fbox(B, f, 0.3, f.len - 0.3, yb + 0.12, yb + 1.0, 0.85, 0.9, 'flat|d0d4d8|0.6|0.3');
     }
     // токийские вертикальные вывески
-    if (style === 'tokyo' && f.len > 4) {
+    if ((style === 'tokyo' || style === 'hk') && f.len > 4) {
       const n = Math.min(3, Math.floor(f.len / 5));
       for (let i = 0; i < n; i++) {
         const a = 1 + R() * (f.len - 2), y = y0 + 4 + R() * Math.max(0.5, h - 9);
@@ -403,10 +406,11 @@ function cityWindow(B, f, c, y, style, ctx) {
   }
   if (style === 'euro' && R() < 0.3) flowers(B, f, c, y - 0.06, 0.25, w, R);
   if (style === 'santorini' && R() < 0.4) fbox(B, f, c - w / 2 - 0.4, c - w / 2 - 0.08, y, y + h, 0.02, 0.06, 'flat|2f6fb3|0.6');
-  if (style === 'tokyo' && R() < 0.25) { fbox(B, f, c + w / 2 + 0.15, c + w / 2 + 0.85, y + 0.1, y + 0.6, 0, 0.3, 'flat|e6e8ea|0.5'); }
+  if ((style === 'tokyo' || style === 'hk') && R() < 0.4) { fbox(B, f, c + w / 2 + 0.15, c + w / 2 + 0.85, y + 0.1, y + 0.6, 0, 0.3, 'flat|e6e8ea|0.5'); }
   if (style === 'paris') {
     fbox(B, f, c - w / 2 - 0.2, c + w / 2 + 0.2, y - 0.1, y - 0.02, 0, 0.45, trim);
-    for (let k = -w / 2 - 0.15; k <= w / 2 + 0.16; k += 0.12) fbox(B, f, c + k - 0.01, c + k + 0.01, y - 0.02, y + 0.85, 0.4, 0.43, 'iron');
+    for (let k = -w / 2 - 0.15; k <= w / 2 + 0.16; k += 0.3) fbox(B, f, c + k - 0.015, c + k + 0.015, y - 0.02, y + 0.85, 0.4, 0.43, 'iron');
+    fbox(B, f, c - w / 2 - 0.2, c + w / 2 + 0.2, y + 0.3, y + 0.34, 0.4, 0.43, 'iron');
     fbox(B, f, c - w / 2 - 0.2, c + w / 2 + 0.2, y + 0.82, y + 0.88, 0.38, 0.45, 'iron');
   }
   if (style === 'kyoto') for (let k = -w / 2 + 0.08; k < w / 2; k += 0.1) fbox(B, f, c + k - 0.015, c + k + 0.015, y, y + h, 0.05, 0.09, 'T|wood3|3a2616|1.5');
@@ -647,7 +651,7 @@ export function palmTree(B, x, z, ctx, H = 7) {
 
 export function car(B, x, z, ry, ctx, kind = 'sedan') {
   const R = ctx.R;
-  const paints = { taxiNY: 'paint|f2c200', taxiJP: 'paint|1b1d22', van: 'paint|e8e8e4', sedan: ['paint|8e1f22', 'paint|1f3f6b', 'paint|c8cbd0', 'paint|202226', 'paint|3d5a3a', 'paint|f0eee8'][Math.floor(R() * 6)], kei: ['paint|f0eee8', 'paint|6ab0d8', 'paint|e8a83a'][Math.floor(R() * 3)] };
+  const paints = { taxiNY: 'paint|f2c200', taxiJP: 'paint|1b1d22', taxiHK: 'paint|c8202a', van: 'paint|e8e8e4', sedan: ['paint|8e1f22', 'paint|1f3f6b', 'paint|c8cbd0', 'paint|202226', 'paint|3d5a3a', 'paint|f0eee8'][Math.floor(R() * 6)], kei: ['paint|f0eee8', 'paint|6ab0d8', 'paint|e8a83a'][Math.floor(R() * 3)] };
   const paint = paints[kind] || paints.sedan;
   const L = kind === 'kei' ? 3.4 : kind === 'van' ? 4.8 : 4.4, W = kind === 'kei' ? 1.5 : 1.8;
   const c = Math.cos(ry), s = Math.sin(ry);
@@ -671,11 +675,19 @@ export function car(B, x, z, ry, ctx, kind = 'sedan') {
   }
   put('head', new THREE.BoxGeometry(0.05, 0.12, 0.3), L / 2, 0.8, W * 0.32); put('head', new THREE.BoxGeometry(0.05, 0.12, 0.3), L / 2, 0.8, -W * 0.32);
   put('tail', new THREE.BoxGeometry(0.05, 0.12, 0.3), -L / 2, 0.85, W * 0.33); put('tail', new THREE.BoxGeometry(0.05, 0.12, 0.3), -L / 2, 0.85, -W * 0.33);
-  if (kind === 'taxiNY' || kind === 'taxiJP') put(kind === 'taxiJP' ? 'glowc|ffd040|1.2' : 'glowc|fff4d0|1', new THREE.BoxGeometry(0.5, 0.18, 0.2), -0.15, 1.75, 0);
+  if (kind === 'taxiNY' || kind === 'taxiJP' || kind === 'taxiHK') put(kind === 'taxiJP' ? 'glowc|ffd040|1.2' : 'glowc|fff4d0|1', new THREE.BoxGeometry(0.5, 0.18, 0.2), -0.15, 1.75, 0);
   // коллайдер по габаритам (ось-ориентированный)
   const hw = Math.abs(L / 2 * c) + Math.abs(W / 2 * s), hd = Math.abs(L / 2 * s) + Math.abs(W / 2 * c);
   B.colliders.push({ min: [x - hw, 0, z - hd], max: [x + hw, kind === 'van' ? 2.2 : 1.1, z + hd] });
   if (kind !== 'van') B.colliders.push({ min: [x - hw * 0.6, 1.1, z - hd * 0.6], max: [x + hw * 0.6, 1.65, z + hd * 0.6] });
+}
+
+export function bicycle(B, x, z, ry) {
+  const c = Math.cos(ry), s = Math.sin(ry);
+  for (const o of [-0.52, 0.52]) { const w = new THREE.TorusGeometry(0.33, 0.025, 6, 20); w.rotateY(ry); w.translate(x + o * c, 0.35, z - o * s); B.push('iron', w); }
+  const bar = (a, b) => { const A = new THREE.Vector3(x + a[0] * c, a[1], z - a[0] * s), Bv = new THREE.Vector3(x + b[0] * c, b[1], z - b[0] * s); const g = new THREE.CylinderGeometry(0.022, 0.022, A.distanceTo(Bv), 5); g.applyQuaternion(new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), Bv.clone().sub(A).normalize())); g.translate((A.x + Bv.x) / 2, (A.y + Bv.y) / 2, (A.z + Bv.z) / 2); B.push('paint|' + ['1b1d22', '8e1f22', '1f3f6b', 'e8e8e4'][Math.abs(Math.round(x * 7 + z * 3)) % 4], g); };
+  bar([-0.52, 0.35], [0, 0.35]); bar([0, 0.35], [0.45, 0.75]); bar([-0.52, 0.35], [-0.12, 0.8]); bar([-0.12, 0.8], [0.45, 0.75]); bar([0.52, 0.35], [0.42, 0.95]); bar([0, 0.35], [-0.12, 0.85]);
+  B.box(x - 0.15 * c - 0.1, 0.84, z + 0.15 * s - 0.1, x - 0.15 * c + 0.1, 0.88, z + 0.15 * s + 0.1, 'flat|1a1a1a|0.8');
 }
 
 export function vending(B, x, z, ry, ctx) {
