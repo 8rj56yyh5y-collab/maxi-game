@@ -1,0 +1,19 @@
+# Render Blueprint: игра — статический сайт (сборка не нужна)
+services:
+  - type: web
+    name: maxi-strike
+    runtime: static
+    branch: claude/confident-gates-m4gn1c
+    buildCommand: ""
+    staticPublishPath: .
+    pullRequestPreviewsEnabled: false
+    headers:
+      - path: /*.glb
+        name: Content-Type
+        value: model/gltf-binary
+      - path: /*.hdr
+        name: Content-Type
+        value: application/octet-stream
+      - path: /assets/*
+        name: Cache-Control
+        value: public, max-age=604800
