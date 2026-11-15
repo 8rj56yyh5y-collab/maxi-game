@@ -228,6 +228,63 @@ function buildFactory(B, group, ctx) {
   for (const c of K.colliders) B.colliders.push(c);
 }
 
+
+// =============== КАРТА «КВАРТАЛ» ===============
+const QB = [-40, -32, 40, 32];
+function perimeter(R, bounds, aptsShare = 0.5) {
+  const [x1, z1, x2, z2] = bounds, per = [];
+  const chunks = (a, b) => { const out = []; let x = a; while (x < b - 0.1) { const w = Math.min(b - x, [12, 15, 18][Math.floor(R() * 3)]); out.push([x, x + w]); x += w; } return out; };
+  const st = () => R() < aptsShare ? 'apts' : 'factory';
+  for (const [a, b] of chunks(x1 - 12, x2 + 12)) { per.push([a, z2, b, z2 + 12, 4 + Math.floor(R() * 3), st()]); per.push([a, z1 - 12, b, z1, 4 + Math.floor(R() * 3), st()]); }
+  for (const [a, b] of chunks(z1, z2)) { per.push([x1 - 12, a, x1, b, 4 + Math.floor(R() * 2), st()]); per.push([x2, a, x2 + 12, b, 4 + Math.floor(R() * 2), st()]); }
+  return per;
+}
+function planter(K, B, x, z) {
+  B.box(x - 0.9, 0, z - 0.9, x + 0.9, 0.55, z + 0.9, 'T|ph_concrete_floor_02|d8d4cc|2', true);
+  K.add(prop(Math.random() < 0.5 ? 'shrub_01' : 'shrub_02'), x, 0.5, z, Math.random() * 6, 0.8);
+}
+function buildQuarter(B, group, ctx) {
+  const R = ctx.R, K = new KitBuilder();
+  const inner = [
+    [-30, 9, -12, 21, 5, 'apts'], [6, 12, 24, 24, 4, 'apts'], [-27, -24, -12, -12, 3, 'factory'], [9, -21, 27, -9, 5, 'apts'],
+    [-6, -6, 3, 3, 2, 'factory'],
+  ];
+  const all = [...inner, ...perimeter(R, QB, 0.75)];
+  for (const b of all) kitBuilding(K, B, b, b[4], b[5], R, exposedBy(all, b, QB), { roofProps: inner.includes(b) });
+  // покрытия: брусчатка повсюду, асфальтовая улица по центру, плитка на площадях
+  B.box(-40, 0, -3.5, 40, 0.012, 3.5, 'T|ph_asphalt_02|ffffff|6');
+  B.box(-40, 0, 3.5, 40, 0.02, 6, 'T|ph_concrete_pavement|ffffff|3'); B.box(-40, 0, -6, 40, 0.02, -3.5, 'T|ph_concrete_pavement|ffffff|3');
+  B.box(-40, 0, 3.45, 40, 0.14, 3.65, 'T|ph_concrete_floor_02|c8c4bc|2'); B.box(-40, 0, -3.65, 40, 0.14, -3.45, 'T|ph_concrete_floor_02|c8c4bc|2');
+  B.box(-12, 0, 21, 6, 0.016, 32, 'T|ph_concrete_pavement|f0ece4|2.5');      // площадь (A)
+  B.box(-40, 0, -32, -12, 0.016, -24, 'T|ph_concrete_floor_damaged_01|d8d4cc|5'); // парковка (B)
+  for (let x = -38; x < 40; x += 6) B.box(x, 0, -0.07, x + 3, 0.016, 0.07, 'flat|e8e4d8|0.7');
+  // ---- площадь A ----
+  for (const [x, z] of [[-9, 24], [3, 24], [-9, 30], [3, 30]]) planter(K, B, x, z);
+  P(K, 'modular_street_seating', -3, 27, 0); P(K, 'modular_street_seating', -3, 29.5, Math.PI);
+  for (const [x, z] of [[-11, 27.5], [5, 27.5]]) P(K, 'street_lamp_02', x, z);
+  P(K, 'covered_car', -18, 25, 1.4); P(K, 'concrete_road_barrier', -24, 29, 0.2); P(K, 'concrete_road_barrier', 12, 27, Math.PI / 2);
+  for (const [x, z, y] of [[-27, 24.5, 0], [-27, 24.5, 1], [-25.9, 24.4, 0]]) P(K, 'wooden_crate_01', x, z, 0.2, 1, y * prop('wooden_crate_01').size.y);
+  P(K, 'metal_trash_can', 9, 30, 0); P(K, 'utility_box_02', -36, 26, Math.PI / 2);
+  // ---- парковка B ----
+  fence(K, B, -40, -24, -30, -24); fence(K, B, -21, -24, -12, -24);
+  for (const [x, z, r] of [[-35, -27.5, Math.PI / 2], [-31.5, -28, Math.PI / 2 + 0.1], [-19, -28.5, Math.PI / 2 - 0.08]]) P(K, 'covered_car', x, z, r);
+  P(K, 'Barrel_01', -25, -30.5); P(K, 'Barrel_02', -24.2, -31); P(K, 'old_tyre', -27, -26.5, 0.4); P(K, 'industrial_pastic_container', -14.5, -30, 0.3);
+  P(K, 'barrel_stove', -38, -31);
+  // ---- центральная улица ----
+  P(K, 'covered_car', -22, -2, Math.PI + 0.05); P(K, 'covered_car', 14, 2, 0.04); P(K, 'concrete_road_barrier_02', 30, 0, Math.PI / 2);
+  P(K, 'concrete_road_barrier', -32, 1, 0.3);
+  for (let x = -36; x <= 36; x += 12) { P(K, 'street_lamp_01', x, 5.3, Math.PI); P(K, 'street_lamp_01', x + 6, -5.3, 0); }
+  for (const [x, z] of [[-16, 5.0], [20, -5.0]]) P(K, 'fire_hydrant', x, z);
+  for (const [x, z] of [[-28, 4.8], [-4, -4.8], [24, 4.8]]) planter(K, B, x, z);
+  for (const [x, z] of [[-10, 0], [22, 1.5]]) K.add(prop('water_manhole_cover'), x, 0.02, z, R() * 3);
+  // ---- юго-восток и северо-восток ----
+  P(K, 'covered_car', 30, -26, 0.4); P(K, 'wooden_barrels_01', 20, -27, 0.3); P(K, 'metal_trash_can', 4, -12, 0); P(K, 'cardboard_box_01', 5, -14, 0.5);
+  P(K, 'covered_car', 30, 27, -0.3); P(K, 'concrete_road_barrier_02', 26, 29, 0.1); P(K, 'metal_jerrycan', 33, 25, 0);
+  fireEscape(K, -21, 9, Math.PI, 5); fireEscape(K, 15, 12, Math.PI, 4); fireEscape(K, 18, -9, 0, 5);
+  K.build(group, ctx.quality !== 'low');
+  for (const c of K.colliders) B.colliders.push(c);
+}
+
 const FACTORY_POINTS = [[0, 0], [-20, 0], [20, 0], [-26, 27], [-26, -27], [0, 24], [0, -24], [24, 27], [24, -27], [-12, 12], [12, 12], [-13, -12], [12, -12], [-40, 0], [40, 0]];
 
 export const REAL_MAPS = {
@@ -249,5 +306,23 @@ export const REAL_MAPS = {
     sky: { elevation: 48, azimuth: 56, turbidity: 3, rayleigh: 1, mie: 0.005, exposure: 0.62 },
     sun: 0xfff1de, sunI: 3.4, hemi: [0xc4d4ea, 0x6a645c, 0.35], fog: [0xb9c6d4, 0.0045], envI: 0.85,
     sites: { A: [-26, 27, 5], B: [-26, -27, 5] },
+  },
+  quarter: {
+    id: 'quarter', name: 'Квартал', desc: 'Жилые дома, площадь, парковка во дворе',
+    bounds: QB, spawns: {
+      A: [[-37, -3], [-37, -1], [-37, 1], [-37, 3], [-35, 0], [-38.5, 2], [-38.5, -2]],
+      B: [[37, -3], [37, -1], [37, 1], [37, 3], [35, 0], [38.5, 2], [38.5, -2]],
+    },
+    points: [[0, 9], [0, -10], [-20, 0], [20, 0], [-20, 27], [-22, -28], [16, 28], [18, -26], [-8, 13], [4, -15], [-34, 0], [34, 0]],
+    boxes: [], decor: [], paths: [], build: buildQuarter,
+    kits: ['modular_factory_facade', 'modular_urban_apartments_facade', 'modular_fire_escape', 'modular_chainlink_fence', 'exterior_aircon_unit', 'covered_car',
+      'concrete_road_barrier', 'concrete_road_barrier_02', 'street_lamp_01', 'street_lamp_02', 'fire_hydrant', 'metal_trash_can', 'utility_box_02', 'water_manhole_cover',
+      'wooden_crate_01', 'Barrel_01', 'Barrel_02', 'barrel_stove', 'industrial_pastic_container', 'wooden_barrels_01', 'cardboard_box_01', 'metal_jerrycan', 'old_tyre',
+      'modular_street_seating', 'shrub_01', 'shrub_02'],
+    ground: 'T|ph_cobblestone_floor_08|ffffff|3',
+    skyImage: 'assets/hdri/sky_clear.jpg', hdri: 'kloofendal_43d_clear_puresky_1k',
+    sky: { elevation: 43, azimuth: 54, turbidity: 3, rayleigh: 1, mie: 0.005, exposure: 0.6 },
+    sun: 0xfff3e2, sunI: 3.6, hemi: [0xc8d8f0, 0x6a645c, 0.35], fog: [0xc2d2e6, 0.004], envI: 0.85,
+    sites: { A: [-3, 27, 5], B: [-26, -28, 5] },
   },
 };

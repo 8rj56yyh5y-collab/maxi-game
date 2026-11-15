@@ -124,7 +124,7 @@ function setLobbyMode(mode) {
 
 // ---------- Живой фон: выбранная карта ----------
 const lobbyMap = { scene: null, id: null, cam: new THREE.PerspectiveCamera(42, innerWidth / innerHeight, 0.05, 1000), building: null };
-const LOBBY_SPOT = { factory: [-38, 1.5], oasis: [-24, -1], port: [0, -28], tokyo: [-24, 0.5], oldtown: [-22, 0], brooklyn: [-24, 5.4], santorini: [-24, 0], paris: [-24, 0], kyoto: [-24, 0], miami: [-24, 0], amsterdam: [-24, 0], hongkong: [-24, 0.5] };
+const LOBBY_SPOT = { factory: [-38, 1.5], quarter: [-31, 1.5], oasis: [-24, -1], port: [0, -28], tokyo: [-24, 0.5], oldtown: [-22, 0], brooklyn: [-24, 5.4], santorini: [-24, 0], paris: [-24, 0], kyoto: [-24, 0], miami: [-24, 0], amsterdam: [-24, 0], hongkong: [-24, 0.5] };
 async function setLobbyMap(id) {
   if (lobbyMap.id === id) return;
   if (lobbyMap.building) { lobbyMap.pending = id; return; }
@@ -224,7 +224,7 @@ function renderLobby(dt) {
 
 // ---------- Превью карт ----------
 const mapThumbs = {};
-const THUMB_CAM = { factory: [[-46, 3.5, 1], [0, 6, 0]], oasis: [[-38, 10, 16], [0, 0, -4]], port: [[-30, 13, -35], [2, 0, 4]] };
+const THUMB_CAM = { factory: [[-46, 3.5, 1], [0, 6, 0]], quarter: [[-38, 3.5, 1], [0, 6, 0]], oasis: [[-38, 10, 16], [0, 0, -4]], port: [[-30, 13, -35], [2, 0, 4]] };
 async function renderMapThumb(id) {
   await prepareMap(id);
   const sc = new THREE.Scene();
