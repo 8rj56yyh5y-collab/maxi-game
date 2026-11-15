@@ -287,7 +287,7 @@ function renderPlay() {
   $('modes').querySelectorAll('.mode-card').forEach(b => b.onclick = () => { m.mode = b.dataset.mode; saveSettings(); sound.uiClick(); renderPlay(); });
   const seg = (key, opts) => `<div class="seg" data-opt="${key}">${opts.map(([v, l]) => `<button data-v="${v}" class="${m[key] == v ? 'on' : ''}">${l}</button>`).join('')}</div>`;
   const rows = [];
-  rows.push(`<div class="row"><label>Карта</label><div class="maps">${Object.values(MAPS).map(mp => `<button class="map-card ${m.map === mp.id ? 'on' : ''}" data-map="${mp.id}">${mapThumbs[mp.id] ? `<img class="thumb" src="${mapThumbs[mp.id]}">` : '<div class="thumb"></div>'}<div class="info"><b>${mp.name}</b></div></button>`).join('')}</div></div>`);
+  rows.push(`<div class="row"><label>Карта</label><div class="maps">${Object.values(MAPS).filter(mp => !mp.hidden).map(mp => `<button class="map-card ${m.map === mp.id ? 'on' : ''}" data-map="${mp.id}">${mapThumbs[mp.id] ? `<img class="thumb" src="${mapThumbs[mp.id]}">` : '<div class="thumb"></div>'}<div class="info"><b>${mp.name}</b></div></button>`).join('')}</div></div>`);
   if (m.mode === 'ranked') {
     const rk = rankOf(profile.rating || 0);
     const prev = rk.next ? (rk.next - 100) : rk.rating;
@@ -893,6 +893,7 @@ async function boot() {
   lf.style.width = '100%';
   if (settings.match.side && settings.match.side !== 'auto') setLobbyTeam(settings.match.side);
   lt.textContent = 'Подготовка лобби…';
+  if (!MAPS[settings.match.map] || MAPS[settings.match.map].hidden) settings.match.map = 'factory';
   await setLobbyMap(settings.match.map);
   goto('play');
   $('loading').classList.add('hidden');
@@ -905,7 +906,7 @@ async function boot() {
 const THUMB_KEY = 'maxi_thumbs_v3';
 async function fillThumbs() {
   for (const id of Object.keys(MAPS)) {
-    if (mapThumbs[id]) continue;
+    if (mapThumbs[id] || MAPS[id].hidden) continue;
     while (game) await new Promise(r => setTimeout(r, 2000));
     try { await renderMapThumb(id); } catch (e) { console.error(e); continue; }
     try { localStorage.setItem(THUMB_KEY, JSON.stringify(mapThumbs)); } catch (e) { /* ignore */ }

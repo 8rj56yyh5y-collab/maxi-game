@@ -40,7 +40,7 @@ const DEFAULTS = {
   crosshair: { style: 'cross', color: '#3dff8b', size: 7, gap: 4, thick: 2, dot: false, outline: true, dynamic: true, alpha: 1 },
   layout: null,
   // Матч
-  match: { mode: 'defuse', map: 'oasis', perTeam: 5, difficulty: 'normal', killsToWin: 40, minutes: 8, rounds: 12 },
+  match: { mode: 'defuse', map: 'factory', perTeam: 5, difficulty: 'normal', killsToWin: 40, minutes: 8, rounds: 12 },
   // Профиль
   nickname: 'Игрок',
 };

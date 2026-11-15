@@ -438,7 +438,7 @@ function buildHongKong(B, group, ctx) {
   billboard(B, 20, 25, 15.4, Math.PI, 10, 4.5, 1);
 }
 
-const common = { bounds: BOUNDS, spawns: SPAWNS, points: POINTS, boxes: [], decor: [], paths: [] };
+const common = { hidden: true, bounds: BOUNDS, spawns: SPAWNS, points: POINTS, boxes: [], decor: [], paths: [] };
 
 export const CITY_MAPS = {
   tokyo: {

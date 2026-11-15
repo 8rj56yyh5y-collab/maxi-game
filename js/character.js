@@ -327,7 +327,8 @@ export class CharacterModel {
   }
 
   // Смерть: включаем рэгдолл
-  die(impulse, head, colliders) {
+  die(impulse, head, colliders, pos) {
+    if (pos) this.root.position.copy(pos);
     this.root.updateMatrixWorld(true);
     this.rag = new Ragdoll(this, impulse, head, colliders);
     this.dropGun(impulse);

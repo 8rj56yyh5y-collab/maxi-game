@@ -754,7 +754,7 @@ export class Game {
     if (victim.model) {
       victim.model.deathDir = Math.random() < 0.5 ? 1 : -1;
       const imp = (victim.lastHitDir || new THREE.Vector3(0, 0, 1)).clone().multiplyScalar(victim.lastHitPow || 2.5).add(new THREE.Vector3(victim.vel.x * 0.8, victim.lastHitPow > 5 ? 3 : 0.3, victim.vel.z * 0.8));
-      try { victim.model.die(imp, head, this.map.colliders); } catch (e) { console.error(e); }
+      try { victim.model.die(imp, head, this.map.colliders, victim.pos); } catch (e) { console.error(e); }
     }
     if (victim.inv.bomb) this.dropBomb(victim);
     if (victim.plantT || victim.defuseT) { victim.plantT = 0; victim.defuseT = 0; if (this.bomb && this.bomb.defuser === victim) this.bomb.defuser = null; }
