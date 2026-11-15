@@ -452,6 +452,49 @@ export function skinCanvas(skin, size = 256) {
       }
       break;
     }
+    case 'graffiti': {
+      // слои краски, брызги, «теги» маркером
+      for (let i = 0; i < 9; i++) { ctx.fillStyle = [b, d || b, '#ffffff'][i % 3]; ctx.globalAlpha = 0.85; const x = r() * size, y = r() * size, rr = (14 + r() * 30) * S; ctx.beginPath(); for (let k = 0; k <= 12; k++) { const an = k / 12 * Math.PI * 2, q = rr * (0.7 + r() * 0.5); k ? ctx.lineTo(x + Math.cos(an) * q, y + Math.sin(an) * q) : ctx.moveTo(x + q, y); } ctx.fill(); }
+      ctx.globalAlpha = 1; ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+      for (let i = 0; i < 6; i++) { ctx.strokeStyle = i % 2 ? '#111111' : (d || '#ffffff'); ctx.lineWidth = (3 + r() * 3) * S; ctx.beginPath(); let x = r() * size, y = r() * size; ctx.moveTo(x, y); for (let k = 0; k < 6; k++) { x += (r() - 0.3) * 30 * S; y += (r() - 0.5) * 24 * S; ctx.quadraticCurveTo(x - 10 * S, y - 14 * S, x, y); } ctx.stroke(); }
+      for (let i = 0; i < 300; i++) { ctx.fillStyle = r() < 0.5 ? b : '#111'; ctx.fillRect(r() * size, r() * size, S, S); }
+      break;
+    }
+    case 'pixel': {
+      const cols = [a, b, d || b, a]; const q = 6 * S;
+      for (let y = 0; y < size; y += q) for (let x = 0; x < size; x += q) { const n = Math.sin(x * 0.05 / S + Math.sin(y * 0.03 / S) * 2) + Math.sin(y * 0.07 / S) + (r() - 0.5) * 0.8; ctx.fillStyle = cols[Math.max(0, Math.min(3, Math.floor((n + 2) / 1.1)))]; ctx.fillRect(x, y, q, q); }
+      break;
+    }
+    case 'flames': {
+      const g = ctx.createLinearGradient(0, size, 0, 0); g.addColorStop(0, a); g.addColorStop(1, '#0a0a0a'); ctx.fillStyle = g; ctx.fillRect(0, 0, size, size);
+      for (let i = 0; i < 18; i++) { const x = r() * size, w = (10 + r() * 20) * S, h = (40 + r() * 70) * S; const fg = ctx.createLinearGradient(0, size, 0, size - h); fg.addColorStop(0, d || '#ffe066'); fg.addColorStop(0.5, b); fg.addColorStop(1, 'rgba(0,0,0,0)'); ctx.fillStyle = fg; ctx.beginPath(); ctx.moveTo(x - w, size); ctx.quadraticCurveTo(x - w * 0.8, size - h * 0.5, x + (r() - 0.5) * w, size - h); ctx.quadraticCurveTo(x + w * 0.9, size - h * 0.4, x + w, size); ctx.fill(); }
+      break;
+    }
+    case 'circuit': {
+      ctx.strokeStyle = b; ctx.fillStyle = b; ctx.lineWidth = 1.5 * S; ctx.shadowColor = b; ctx.shadowBlur = 5 * S;
+      for (let i = 0; i < 40; i++) { let x = Math.round(r() * 16) * 8 * S, y = Math.round(r() * 16) * 8 * S; ctx.beginPath(); ctx.moveTo(x, y); for (let k = 0; k < 3; k++) { if (r() < 0.5) x += (r() < 0.5 ? -1 : 1) * 16 * S; else { const dd = (r() < 0.5 ? -1 : 1) * 12 * S; x += dd; y += dd; } ctx.lineTo(x, y); } ctx.stroke(); ctx.beginPath(); ctx.arc(x, y, 2.2 * S, 0, Math.PI * 2); ctx.fill(); }
+      ctx.shadowBlur = 0;
+      if (d) { for (let i = 0; i < 6; i++) { ctx.fillStyle = d; ctx.fillRect(r() * size, r() * size, 10 * S, 6 * S); } }
+      break;
+    }
+    case 'waves': {
+      ctx.strokeStyle = b; ctx.lineWidth = 2 * S;
+      const R0 = 16 * S;
+      for (let y = 0; y < size + R0; y += R0 * 0.7) for (let x = 0; x < size + R0 * 2; x += R0 * 2) {
+        const ox = Math.round(y / (R0 * 0.7)) % 2 ? R0 : 0;
+        for (let k = 4; k > 0; k--) { ctx.beginPath(); ctx.fillStyle = k % 2 ? a : (d || a); ctx.arc(x + ox, y, R0 * k / 4, Math.PI, 0); ctx.fill(); ctx.stroke(); }
+      }
+      break;
+    }
+    case 'splatter': {
+      for (let i = 0; i < 26; i++) { ctx.fillStyle = [b, d || b][i % 2]; const x = r() * size, y = r() * size, rr = (4 + r() * 16) * S; ctx.beginPath(); ctx.arc(x, y, rr, 0, Math.PI * 2); ctx.fill(); for (let k = 0; k < 8; k++) { const an = r() * Math.PI * 2, q = rr * (1.2 + r() * 2.2); ctx.beginPath(); ctx.arc(x + Math.cos(an) * q, y + Math.sin(an) * q, rr * 0.18 * r() + S, 0, Math.PI * 2); ctx.fill(); } }
+      break;
+    }
+    case 'chrome': {
+      const g = ctx.createLinearGradient(0, 0, 0, size); g.addColorStop(0, '#ffffff'); g.addColorStop(0.35, a); g.addColorStop(0.5, b); g.addColorStop(0.62, '#ffffff'); g.addColorStop(1, d || a);
+      ctx.fillStyle = g; ctx.fillRect(0, 0, size, size);
+      break;
+    }
   }
   return c;
 }
@@ -459,7 +502,7 @@ export function skinCanvas(skin, size = 256) {
 const skinTexCache = new Map();
 export function skinTexture(skin) {
   if (skinTexCache.has(skin.id)) return skinTexCache.get(skin.id);
-  const t = new THREE.CanvasTexture(skinCanvas(skin));
+  const t = new THREE.CanvasTexture(skinCanvas(skin, 512));
   t.wrapS = t.wrapT = THREE.RepeatWrapping;
   t.colorSpace = THREE.SRGBColorSpace;
   t.anisotropy = 4;

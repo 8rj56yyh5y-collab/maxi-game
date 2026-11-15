@@ -27,6 +27,18 @@ function load() {
 }
 
 export const profile = load();
+// Стартовый набор (один раз)
+if (!profile.starterV3) {
+  const give = (id) => { if (SKINS[id] && !profile.owned.includes(id)) profile.owned.push(id); };
+  give('knife_damascus'); give('karambit_tiger'); give('butterfly_casehard');
+  for (const w of ['ak', 'ar4', 'awr', 'p9', 'p18', 'sv98']) {
+    const list = Object.values(SKINS).filter(sk => sk.weapon === w && ['epic', 'legendary'].includes(sk.rarity));
+    if (list.length) give(list[Math.floor(Math.random() * list.length)].id);
+  }
+  profile.cases = { ...profile.cases, street: (profile.cases.street || 0) + 1, cyber: (profile.cases.cyber || 0) + 1, gem: (profile.cases.gem || 0) + 1 };
+  profile.starterV3 = true;
+  try { localStorage.setItem(KEY, JSON.stringify(profile)); } catch (e) { /* ignore */ }
+}
 
 export function saveProfile() {
   try { localStorage.setItem(KEY, JSON.stringify(profile)); } catch (e) { /* ignore */ }

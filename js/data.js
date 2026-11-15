@@ -127,6 +127,19 @@ export const STYLES = [
   { key: 'momiji',  name: 'Момидзи',        rarity: 'epic',      pattern: 'camo',     colors: ['#d2401e', '#f0a030', '#5a1e0e'], theme: 'kyoto' },
   { key: 'geisha',  name: 'Гейша',          rarity: 'legendary', pattern: 'gradient', colors: ['#f4f0ea', '#b8202a', '#1a1a1a'], theme: 'kyoto' },
   { key: 'shogun',  name: 'Сёгун',          rarity: 'mythic',    pattern: 'dragon',   colors: ['#2a0a0a', '#d4af37', '#8a1010'], glow: '#ffb000', theme: 'kyoto' },
+  { key: 'tagger',  name: 'Граффити',       rarity: 'rare',      pattern: 'graffiti', colors: ['#2b2b30', '#ff3ea5', '#3ef0ff'], theme: 'street' },
+  { key: 'bomber',  name: 'Бомбер',         rarity: 'epic',      pattern: 'graffiti', colors: ['#f2e6c8', '#ff6a00', '#1d6bff'], theme: 'street' },
+  { key: 'splash',  name: 'Клякса',         rarity: 'rare',      pattern: 'splatter', colors: ['#f4f4f4', '#ff2d55', '#111111'], theme: 'street' },
+  { key: 'wildstyle', name: 'Вайлдстайл',   rarity: 'legendary', pattern: 'graffiti', colors: ['#120a1f', '#ffe14a', '#b35cff'], glow: '#b35cff', theme: 'street' },
+  { key: 'digital', name: 'Цифра',          rarity: 'common',    pattern: 'pixel',    colors: ['#5b6142', '#3b4030', '#8a8f6a'], theme: 'cyber' },
+  { key: 'digiblue', name: 'Цифровой лёд',  rarity: 'rare',      pattern: 'pixel',    colors: ['#c8dff0', '#4a7ea8', '#1d3a5a'], theme: 'cyber' },
+  { key: 'mainframe', name: 'Мейнфрейм',    rarity: 'epic',      pattern: 'circuit',  colors: ['#06140c', '#2cff8a', '#ffd400'], glow: '#2cff8a', theme: 'cyber' },
+  { key: 'overclock', name: 'Разгон',       rarity: 'legendary', pattern: 'circuit',  colors: ['#0b0618', '#ff2e63', '#00e5ff'], glow: '#ff2e63', theme: 'cyber' },
+  { key: 'chromed', name: 'Хром',           rarity: 'legendary', pattern: 'chrome',   colors: ['#9aa4b0', '#3a4250', '#c8d0da'], theme: 'cyber' },
+  { key: 'inferno', name: 'Инферно',        rarity: 'epic',      pattern: 'flames',   colors: ['#3a0800', '#ff4a00', '#ffd400'], glow: '#ff6a00', theme: 'elements' },
+  { key: 'blueflame', name: 'Синее пламя',  rarity: 'legendary', pattern: 'flames',   colors: ['#000a2a', '#1d6bff', '#a8e6ff'], glow: '#3a8aff', theme: 'elements' },
+  { key: 'tsunami', name: 'Цунами',         rarity: 'epic',      pattern: 'waves',    colors: ['#0b3c5d', '#e8f4ff', '#1d6b9a'], theme: 'elements' },
+  { key: 'goldwave', name: 'Золотая волна', rarity: 'mythic',    pattern: 'waves',    colors: ['#1a1205', '#ffd76a', '#8a5a00'], glow: '#ffaa00', theme: 'elements' },
 ];
 
 function hash(s) { let h = 2166136261; for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619); } return h >>> 0; }
@@ -176,6 +189,14 @@ export const CASES = [
     weights: { rare: 40, epic: 34, legendary: 19, mythic: 7 }, knifeChance: 0.02 },
   { id: 'starter', name: 'Кейс новичка', price: 0, currency: 'credits', creditPrice: 120, color: '#7a8a9a', filter: (s) => !KNIVES[s.weapon] && ['common', 'rare'].includes(s.rarity),
     weights: { common: 75, rare: 25 } },
+  { id: 'street', name: 'Кейс «Улицы»',   price: 140, currency: 'gold', color: '#ff3ea5', filter: (s) => !KNIVES[s.weapon] && s.theme === 'street',
+    weights: { rare: 50, epic: 32, legendary: 14, mythic: 4 }, knifeChance: 0.015 },
+  { id: 'cyber',  name: 'Кейс «Кибер»',    price: 190, currency: 'gold', color: '#2cff8a', filter: (s) => !KNIVES[s.weapon] && (s.theme === 'cyber' || ['cyber', 'neon', 'carbon'].includes(s.style)),
+    weights: { common: 20, rare: 36, epic: 26, legendary: 14, mythic: 4 }, knifeChance: 0.02 },
+  { id: 'elements', name: 'Кейс «Стихии»', price: 220, currency: 'gold', color: '#ff6a00', filter: (s) => !KNIVES[s.weapon] && (s.theme === 'elements' || ['lava', 'ice', 'toxic'].includes(s.style)),
+    weights: { epic: 48, legendary: 36, mythic: 16 }, knifeChance: 0.03 },
+  { id: 'gem',    name: 'Кейс «Самоцветы»', price: 700, currency: 'gold', color: '#7ab4ff', filter: (s) => !!KNIVES[s.weapon] && ['sapphire', 'ruby', 'emerald', 'gold', 'fade', 'marble', 'ocean'].includes(s.finish),
+    weights: { mythic: 100 } },
   { id: 'blade',  name: 'Кейс «Клинок»',  price: 500, currency: 'gold', color: '#ffb400', filter: (s) => !!KNIVES[s.weapon] && s.weapon !== 'knife',
     weights: { epic: 40, legendary: 42, mythic: 18 } },
 ];
@@ -254,6 +275,6 @@ export const PASS_XP = 600;
 export const PASS = Array.from({ length: 30 }, (_, i) => {
   const lvl = i + 1;
   const free = lvl % 5 === 0 ? { cases: { field: 1 } } : lvl % 2 === 0 ? { credits: 500 + lvl * 20 } : { credits: 250 };
-  const prem = lvl === 30 ? { skin: 'karambit_shibuya' } : lvl === 25 ? { skin: 'ak_oni' } : lvl === 20 ? { skin: 'ar4_shibuya' } : lvl % 5 === 0 ? { cases: { tokyo: 1 } } : lvl % 3 === 0 ? { gold: 60 } : { credits: 600 };
+  const prem = lvl === 30 ? { skin: 'karambit_fade' } : lvl === 25 ? { skin: 'ak_oni' } : lvl === 20 ? { skin: 'ar4_shibuya' } : lvl % 5 === 0 ? { cases: { tokyo: 1 } } : lvl % 3 === 0 ? { gold: 60 } : { credits: 600 };
   return { lvl, free, prem };
 });

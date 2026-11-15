@@ -12,7 +12,7 @@ import { skinPreviewURL } from './textures.js';
 import { CharacterModel } from './character.js';
 import { buildWeaponModel } from './weapons.js';
 import { setupAtmosphere, followShadow, Pipeline } from './render.js';
-import { buildWeaponIcons, iconImg } from './icons.js';
+import { buildWeaponIcons, iconImg, initItemRenderer, itemImage, pumpItemImages } from './icons.js';
 import { loadCore, loadHDRI, texSet, texturesReady, A } from './assets.js';
 import { sound } from './audio.js';
 
@@ -75,10 +75,12 @@ async function buildLobby() {
     const m = new THREE.Mesh(g, new THREE.MeshStandardMaterial({ map: s.map, normalMap: s.normalMap, roughnessMap: s.roughnessMap, color }));
     m.position.set(x, y, z); m.rotation.y = ry; m.castShadow = m.receiveShadow = true; sc.add(m);
   };
-  box(7, 3.2, 0.5, -0.5, 1.6, -3.4, 'concrete', 0.05, 0x8c96a0);
-  box(2.6, 2.6, 6, 4.4, 1.3, -2.4, 'metal', -0.3, 0x6b8299);
-  box(1, 1, 1, 1.7, 0.5, -1.4, 'wood', 0.4); box(1, 1, 1, 2.3, 0.5, -0.4, 'wood', -0.2); box(0.8, 0.8, 0.8, 2.0, 1.4, -0.9, 'wood', 0.7);
-  box(1, 1, 1, -2.5, 0.5, -1.3, 'wood', 0.2);
+  void box;
+  // студийный фон: вертикальный градиент с тёплым пятном
+  { const c = document.createElement('canvas'); c.width = 16; c.height = 512; const x = c.getContext('2d');
+    const g = x.createLinearGradient(0, 0, 0, 512); g.addColorStop(0, '#05070a'); g.addColorStop(0.55, '#141820'); g.addColorStop(0.75, '#1c1610'); g.addColorStop(1, '#05070a');
+    x.fillStyle = g; x.fillRect(0, 0, 16, 512); const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; sc.background = t; }
+  sc.fog = new THREE.Fog(0x0a0c10, 6, 14);
   lobby.weaponHolder = new THREE.Group(); lobby.weaponHolder.position.set(0, 1.15, 0); sc.add(lobby.weaponHolder);
   const pg = new THREE.BufferGeometry(); const pts = new Float32Array(300 * 3);
   for (let i = 0; i < 300; i++) { pts[i * 3] = (Math.random() - 0.5) * 6; pts[i * 3 + 1] = Math.random() * 3.5; pts[i * 3 + 2] = (Math.random() - 0.5) * 5; }
@@ -281,8 +283,24 @@ const OPTIONS = {
   killsToWin: [[20, '20'], [40, '40'], [60, '60'], [100, '100']],
   minutes: [[5, '5 мин'], [8, '8 мин'], [12, '12 мин']],
 };
+function renderPlayWidgets() {
+  const lvl = passLevel(), xpIn = (profile.passXp || 0) % PASS_XP;
+  const rk = rankOf(profile.rating || 0), li = levelInfo(profile.xp || 0);
+  const owned = profile.owned.length, total = Object.keys(ALL_SKINS).length;
+  const cases = Object.values(profile.cases || {}).reduce((a, b) => a + b, 0);
+  $('play-widgets').innerHTML = `
+    <button class="pw pw-pass" data-goto="pass"><small>${SEASON.name}</small><b>Боевой пропуск · ур. ${lvl}</b><div class="pw-bar"><i style="width:${xpIn / PASS_XP * 100}%"></i></div></button>
+    <button class="pw pw-rank" data-mode="ranked">${rankBadge(rk.rating, 40)}<div><small>Рейтинг</small><b style="color:${rk.color}">${rk.name}</b><span>${rk.rating} RP</span></div></button>
+    <button class="pw pw-cases" data-goto="cases"><small>Кейсы</small><b>${cases ? cases + ' к открытию' : 'Новые коллекции'}</b><span>Собрано скинов: ${owned} / ${total}</span></button>
+    ${dailyAvailable() ? `<button class="pw pw-daily" data-goto="store"><small>Награда дня</small><b>Забрать</b></button>` : ''}`;
+  $('play-widgets').querySelectorAll('[data-goto]').forEach(b => b.onclick = () => goto(b.dataset.goto));
+  $('play-widgets').querySelectorAll('[data-mode]').forEach(b => b.onclick = () => { settings.match.mode = b.dataset.mode; saveSettings(); renderPlay(); });
+  void li;
+}
+
 function renderPlay() {
   const m = settings.match;
+  renderPlayWidgets();
   $('modes').innerHTML = Object.values(MODES).map(md => `<button class="mode-card ${md.id === 'ranked' ? 'ranked' : ''} ${m.mode === md.id ? 'on' : ''}" data-mode="${md.id}" style="--mc:${md.color}"><b>${md.name}</b><small>${md.id === 'ranked' ? rankOf(profile.rating || 0).name + ' · ' + (profile.rating || 0) + ' RP' : md.desc}</small>${md.id === 'ranked' ? `<span class="mc-rank">${rankBadge(profile.rating || 0, 44)}</span>` : ''}</button>`).join('');
   $('modes').querySelectorAll('.mode-card').forEach(b => b.onclick = () => { m.mode = b.dataset.mode; saveSettings(); sound.uiClick(); renderPlay(); });
   const seg = (key, opts) => `<div class="seg" data-opt="${key}">${opts.map(([v, l]) => `<button data-v="${v}" class="${m[key] == v ? 'on' : ''}">${l}</button>`).join('')}</div>`;
@@ -361,7 +379,7 @@ function loInfo(id) {
     ${skin ? `<div style="color:${RARITY[skin.rarity].color};font-weight:700">${skin.name}</div>` : ''}
     <div style="margin-top:10px">${weaponStatsBars(id)}</div>
     <div class="card-title" style="margin-top:12px">Скины (${skins.length})</div>
-    <div class="skin-grid" style="max-height:170px">${[{ id: '', name: 'Стандарт' }, ...skins].map(s => `<button class="skin ${(profile.equipped[id] || '') === s.id ? 'on' : ''}" data-sk="${s.id}" ${s.rarity ? `style="--rc:${RARITY[s.rarity].color}"` : ''}>${s.id ? `<img class="sw" src="${skinPreviewURL(s)}">` : '<div class="sw" style="background:#2a313a"></div>'}<div class="nm">${s.name}</div></button>`).join('')}</div></div>`;
+    <div class="skin-grid" style="max-height:170px">${[{ id: '', name: 'Стандарт' }, ...skins].map(s => `<button class="skin ${(profile.equipped[id] || '') === s.id ? 'on' : ''}" data-sk="${s.id}" ${s.rarity ? `style="--rc:${RARITY[s.rarity].color}"` : ''}>${s.id ? itemPic(s) : '<div class="sw" style="background:#2a313a"></div>'}<div class="nm">${s.name}</div></button>`).join('')}</div></div>`;
   $('lo-info').querySelectorAll('[data-sk]').forEach(b => b.onclick = () => { equip(id, b.dataset.sk || null); sound.uiClick(); loInfo(id); if (lobby.char) setLobbyCharacter(); });
 }
 
@@ -378,7 +396,7 @@ function renderInventory() {
     .filter(s => invRarity === 'all' || s.rarity === invRarity)
     .sort((a, b) => RARITY_ORDER.indexOf(b.rarity) - RARITY_ORDER.indexOf(a.rarity));
   $('inv-count').textContent = `${profile.owned.length} предметов`;
-  $('inv-grid').innerHTML = items.length ? items.map(s => `<button class="skin ${invSel === s.id ? 'on' : ''}" data-id="${s.id}" style="--rc:${RARITY[s.rarity].color}"><img class="sw" src="${skinPreviewURL(s)}">${iconImg(s.weapon)}<div class="nm">${itemName(s.weapon).split(' «')[0]} | ${s.name}</div><div class="rr" style="color:${RARITY[s.rarity].color}">${RARITY[s.rarity].name}</div>${profile.equipped[s.weapon] === s.id ? '<span class="eq">ВЫБРАН</span>' : ''}</button>`).join('')
+  $('inv-grid').innerHTML = items.length ? items.map(s => `<button class="skin ${invSel === s.id ? 'on' : ''}" data-id="${s.id}" style="--rc:${RARITY[s.rarity].color}">${itemPic(s)}<div class="nm">${itemName(s.weapon).split(' «')[0]} | ${s.name}</div><div class="rr" style="color:${RARITY[s.rarity].color}">${RARITY[s.rarity].name}</div>${profile.equipped[s.weapon] === s.id ? '<span class="eq">ВЫБРАН</span>' : ''}</button>`).join('')
     : '<p class="hint">Пусто. Открывайте кейсы, чтобы получить скины и ножи.</p>';
   $('inv-grid').querySelectorAll('.skin').forEach(b => b.onclick = () => { invSel = b.dataset.id; sound.uiClick(); renderInventory(); });
   invInfo();
@@ -392,6 +410,13 @@ function invInfo() {
     <div class="btn-row" style="margin-top:12px"><button class="btn" id="inv-eq">${eq ? 'Снять' : 'Экипировать'}</button><button class="btn danger" id="inv-sell">Продать · ◈ ${RARITY[s.rarity].sell * 10}</button></div></div>`;
   $('inv-eq').onclick = () => { equip(s.weapon, eq ? null : s.id); if (!eq && KNIVES[s.weapon]) profile.knife = s.weapon; saveProfile(); sound.uiClick(); renderInventory(); };
   $('inv-sell').onclick = () => { const v = sellSkin(s.id); toast(`Продано за ◈ ${v}`); invSel = null; renderTopbar(); renderInventory(); };
+}
+
+// Картинка предмета: 3D-рендер (готовится в фоне), пока — образец узора
+function onItemReady(id, url) { if (!url) return; document.querySelectorAll(`img[data-item="${id}"]`).forEach(img => { img.src = url; img.classList.add('r3d'); img.removeAttribute('data-item'); }); }
+function itemPic(s) {
+  const url = itemImage(s, onItemReady);
+  return url ? `<img class="ipic r3d" src="${url}" alt="">` : `<img class="ipic" data-item="${s.id}" src="${skinPreviewURL(s)}" alt="">`;
 }
 
 // ---------- Кейсы ----------
@@ -420,7 +445,7 @@ function renderCases() {
 }
 $('modal-close').onclick = () => $('modal').classList.add('hidden');
 function skinCard(s) {
-  return `<div class="skin" style="--rc:${RARITY[s.rarity].color}"><img class="sw" src="${skinPreviewURL(s)}">${iconImg(s.weapon)}<div class="nm">${s.name}</div><div class="rr" style="color:${RARITY[s.rarity].color}">${itemName(s.weapon).split(' «')[0]}</div></div>`;
+  return `<div class="skin" style="--rc:${RARITY[s.rarity].color}">${itemPic(s)}<div class="nm">${s.name}</div><div class="rr" style="color:${RARITY[s.rarity].color}">${itemName(s.weapon).split(' «')[0]}</div></div>`;
 }
 let lastOpened = null;
 function startCaseOpen(c) {
@@ -434,6 +459,8 @@ function startCaseOpen(c) {
   const items = [];
   for (let i = 0; i < N; i++) items.push(i === WIN ? res.skin : pool[Math.floor(Math.random() * pool.length)]);
   const strip = $('roulette-strip');
+  for (const it of items) itemImage(it, onItemReady);
+  pumpItemImages(64);
   strip.innerHTML = items.map(skinCard).join('');
   strip.style.transition = 'none'; strip.style.transform = 'translateX(0)';
   $('case-open-title').textContent = c.name;
@@ -876,7 +903,7 @@ function frame(now) {
     game.render();
     hud.update(dt, fps);
     if (isBuyOpen()) { if (!game.canBuy(game.player)) toggleBuy(false); else if ((now | 0) % 10 === 0) { $('buy-money').textContent = '$' + game.player.money; $('buy-time').textContent = `Осталось ${Math.ceil(game.buyLeft)} с`; } }
-  } else if (lobby.char) renderLobby(dt);
+  } else { pumpItemImages(2); if (lobby.char) renderLobby(dt); }
 }
 window.addEventListener('resize', () => { renderer.setSize(innerWidth, innerHeight, false); if (game) game.resize(innerWidth, innerHeight); });
 
@@ -887,6 +914,7 @@ async function boot() {
   await loadCore((p) => { lf.style.width = (p * 70) + '%'; });
   lt.textContent = 'Подготовка оружия…'; await nextFrame();
   buildWeaponIcons(renderer);
+  initItemRenderer(renderer);
   lt.textContent = 'Подготовка лобби…'; lf.style.width = '78%';
   await buildLobby();
   try { Object.assign(mapThumbs, JSON.parse(localStorage.getItem(THUMB_KEY) || '{}')); } catch (e) { /* ignore */ }
