@@ -4,6 +4,10 @@ import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { surface, contactShadowTexture, leafTexture } from './textures.js';
 import { texSet } from './assets.js';
+import { cityMaterial, cityTile, finishLighting, makeLightPool } from './city.js';
+import { CITY_MAPS } from './citymaps.js';
+let curNight = false;
+const isCityKey = (k) => k.includes('|') || ['neonH', 'neonV', 'winLit', 'glass', 'shopGlass', 'vending', 'ads', 'lantern', 'clock', 'roofTile', 'roofTileJp', 'bulb', 'chrome', 'carGlass', 'tail', 'head', 'bark', 'iron', 'skyline', 'leafPalm'].includes(k);
 
 // Реальные PBR-текстуры (ambientCG, CC0): ключ → набор, размер тайла (м), тонировка
 const REAL = {
@@ -120,6 +124,8 @@ export const MAPS = {
   },
 };
 
+Object.assign(MAPS, CITY_MAPS);
+
 // ---------- материалы ----------
 const matCache = {};
 function patchGroundAO(mat) {
@@ -132,6 +138,7 @@ function patchGroundAO(mat) {
   mat.customProgramCacheKey = () => 'gao';
 }
 export function mapMaterial(key) {
+  if (isCityKey(key)) { const cm = cityMaterial(key, curNight); if (cm) return cm; }
   if (matCache[key]) return matCache[key];
   let m;
   const std = (o) => new THREE.MeshStandardMaterial(o);
@@ -203,13 +210,16 @@ class Builder {
       const merged = mergeGeometries(norm, false);
       if (!merged) continue;
       const mesh = new THREE.Mesh(merged, mapMaterial(mat));
-      const shadows = quality !== 'low' && !this.shadowless.has(mat);
-      mesh.castShadow = shadows; mesh.receiveShadow = quality !== 'low';
+      const pool = mat.startsWith('pool|');
+      const shadows = quality !== 'low' && !this.shadowless.has(mat) && !pool && mat !== 'water';
+      mesh.castShadow = shadows; mesh.receiveShadow = quality !== 'low' && !pool;
+      if (pool) mesh.renderOrder = 2;
       group.add(mesh);
     }
   }
 }
 function surfaceTile(mat) {
+  if (isCityKey(mat)) return cityTile(mat);
   if (REAL[mat]) return REAL[mat].tile;
   if (['win', 'darkHole', 'steel', 'black', 'yellow', 'trunk', 'leaf', 'glow', 'carPaint', 'carPaint2', 'rubber', 'water', 'mountain'].includes(mat)) return 1;
   return surface(mat).tile;
@@ -576,9 +586,17 @@ function siteMarker(name, x, z, r) {
 // ---------- сборка ----------
 export function buildMap(scene, id, quality) {
   const def = MAPS[id];
+  curNight = !!def.night;
   const group = new THREE.Group();
   const B = new Builder();
-  const R = rnd(id === 'oasis' ? 1234 : 777);
+  const R = rnd(id === 'oasis' ? 1234 : id.length * 97 + 777);
+  let lightCtx = null;
+  if (def.build) {
+    lightCtx = { R, night: !!def.night, evening: !!def.evening, pools: [], lamps: [] };
+    def.build(B, group, lightCtx);
+    const byCol = finishLighting(group, lightCtx, quality);
+    for (const [k, geos] of Object.entries(byCol)) for (const g of geos) B.push('pool|' + k, g);
+  }
   const solid = def.boxes.filter(b => !['crate', 'barrel'].includes(b[5]));
 
   // Сторона фасада «открыта», если перед ней нет вплотную другой коробки
@@ -591,7 +609,7 @@ export function buildMap(scene, id, quality) {
     return true;
   };
 
-  for (const b of def.boxes) {
+  for (const b of (def.build ? [] : def.boxes)) {
     const k = b[5];
     if (k.startsWith('house')) house(B, b, R, exposedFn(b));
     else if (k === 'border') borderWall(B, b, R);
@@ -610,7 +628,7 @@ export function buildMap(scene, id, quality) {
     else if (d[0] === 'wire') wire(group, [d[1], d[2], d[3]], [d[4], d[5], d[6]]);
     else if (d[0] === 'roof') roof(B, d[1], d[2], d[3], d[4], d[5]);
   }
-  backdrop(B, group, def, R);
+  if (!def.build) backdrop(B, group, def, R);
   B.build(group, quality);
 
   // Пол
@@ -640,19 +658,20 @@ export function buildMap(scene, id, quality) {
   if (def.sites) for (const [name, [sx, sz, sr]] of Object.entries(def.sites)) group.add(siteMarker(name, sx, sz, sr));
   // Мягкие контактные тени у основания объектов
   const aoMat = new THREE.MeshBasicMaterial({ map: contactShadowTexture(), transparent: true, depthWrite: false, opacity: 0.55, polygonOffset: true, polygonOffsetFactor: -3 });
+  const aoGeos = [];
   for (const c of B.colliders) {
-    if (c.min[1] > 0.01) continue;
+    if (c.min[1] > 0.01 || c.max[1] < 0.3) continue;
     const w = c.max[0] - c.min[0] + 1.6, d = c.max[2] - c.min[2] + 1.6;
-    const p = new THREE.Mesh(new THREE.PlaneGeometry(w, d), aoMat);
-    p.rotation.x = -Math.PI / 2; p.position.set((c.min[0] + c.max[0]) / 2, 0.012, (c.min[2] + c.max[2]) / 2);
-    p.renderOrder = 1;
-    group.add(p);
+    const g = new THREE.PlaneGeometry(w, d); g.rotateX(-Math.PI / 2); g.translate((c.min[0] + c.max[0]) / 2, 0.1, (c.min[2] + c.max[2]) / 2);
+    aoGeos.push(g);
   }
+  if (aoGeos.length) { const ao = new THREE.Mesh(mergeGeometries(aoGeos, false), aoMat); ao.renderOrder = 1; group.add(ao); }
 
   scene.add(group);
   const colliders = B.colliders;
   const nav = buildNavGrid(def, colliders);
-  return { def, group, colliders, nav };
+  const updateLights = lightCtx && lightCtx.lamps.length && def.lightCount && quality !== 'low' ? makeLightPool(scene, lightCtx.lamps, def.lightCount) : null;
+  return { def, group, colliders, nav, updateLights };
 }
 
 // ---------- Навигационная сетка для ботов ----------

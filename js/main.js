@@ -5,13 +5,13 @@ import { Input, BTN_ICONS } from './input.js';
 import { HUD } from './hud.js';
 import { Game } from './game.js';
 import { MAPS, buildMap } from './maps.js';
-import { WEAPONS, KNIVES, GRENADES, CATS, CAT_ORDER, MODES, MAP_INFO, RARITY, RARITY_ORDER, CASES, STORE, levelInfo, itemName } from './data.js';
+import { WEAPONS, KNIVES, GRENADES, CATS, CAT_ORDER, MODES, MAP_INFO, RARITY, RARITY_ORDER, CASES, STORE, levelInfo, itemName, rankOf, rankBadge, SEASON, PASS, PASS_XP, SKINS as ALL_SKINS } from './data.js';
 import { DIFFICULTY } from './bots.js';
-import { profile, saveProfile, SKINS, equip, equippedSkin, openCase, buyCase, casePrice, caseContents, sellSkin, ownedKnives, buyStoreItem, dailyAvailable, claimDaily, weaponAvailableFor } from './skins.js';
+import { profile, saveProfile, SKINS, equip, equippedSkin, openCase, buyCase, casePrice, caseContents, sellSkin, ownedKnives, buyStoreItem, dailyAvailable, claimDaily, weaponAvailableFor, passLevel, claimPass } from './skins.js';
 import { skinPreviewURL } from './textures.js';
 import { CharacterModel } from './character.js';
 import { buildWeaponModel } from './weapons.js';
-import { setupAtmosphere } from './render.js';
+import { setupAtmosphere, followShadow, Pipeline } from './render.js';
 import { buildWeaponIcons, iconImg } from './icons.js';
 import { loadCore, loadHDRI, texSet, texturesReady, A } from './assets.js';
 import { sound } from './audio.js';
@@ -122,10 +122,62 @@ function setLobbyMode(mode) {
   if (lobby.weaponHolder) lobby.weaponHolder.visible = mode === 'weapon';
 }
 
+// ---------- Живой фон: выбранная карта ----------
+const lobbyMap = { scene: null, id: null, cam: new THREE.PerspectiveCamera(42, innerWidth / innerHeight, 0.05, 1000), building: null };
+const LOBBY_SPOT = { oasis: [-24, -1], port: [0, -28], tokyo: [-24, 0.5], oldtown: [-22, 0], brooklyn: [-24, 5.4], santorini: [-24, 0], paris: [-24, 0], kyoto: [-24, 0], miami: [-24, 0] };
+async function setLobbyMap(id) {
+  if (lobbyMap.id === id) return;
+  if (lobbyMap.building) { lobbyMap.pending = id; return; }
+  lobbyMap.building = id;
+  try {
+    const sc = new THREE.Scene();
+    const m = buildMap(sc, id, settings.quality);
+    const at = setupAtmosphere(renderer, sc, MAPS[id], settings.quality, await loadHDRI(MAPS[id].hdri));
+    disposeLobbyMap();
+    const pipe = new Pipeline(renderer);
+    pipe.setup(sc, lobbyMap.cam, null, null, at.exposure);
+    const key = new THREE.SpotLight(0xfff1e0, MAPS[id].night ? 40 : 22, 12, 0.5, 0.6, 1.6);
+    const rim = new THREE.PointLight(MAPS[id].night ? 0x6ad0ff : 0xffd6a0, MAPS[id].night ? 14 : 8, 6, 1.6);
+    sc.add(key, key.target, rim);
+    Object.assign(lobbyMap, { scene: sc, map: m, atmo: at, pipe, id, key, rim });
+    if (lobby.char && lobby.mode === 'char') sc.add(lobby.char.root);
+  } catch (e) { console.error(e); }
+  lobbyMap.building = null;
+  if (lobbyMap.pending && lobbyMap.pending !== id) { const n = lobbyMap.pending; lobbyMap.pending = null; setLobbyMap(n); }
+}
+function disposeLobbyMap() {
+  if (!lobbyMap.scene) return;
+  if (lobby.char && lobby.char.root.parent === lobbyMap.scene) lobby.scene.add(lobby.char.root);
+  lobbyMap.pipe.dispose();
+  lobbyMap.scene.traverse(o => { if (o.geometry && !o.isSkinnedMesh) o.geometry.dispose(); });
+  lobbyMap.atmo.env.dispose();
+  lobbyMap.scene = null; lobbyMap.id = null;
+}
+
 function renderLobby(dt) {
   lobby.t += dt;
   const aspect = innerWidth / innerHeight;
   lobby.camera.aspect = aspect; lobby.camera.updateProjectionMatrix();
+  if (lobby.mode === 'char' && lobby.char && lobbyMap.scene) {
+    const [cx, cz] = LOBBY_SPOT[lobbyMap.id] || [-24, 0];
+    if (lobby.char.root.parent !== lobbyMap.scene) lobbyMap.scene.add(lobby.char.root);
+    const o = Math.sin(lobby.t * 0.08) * 0.35;
+    const cam = lobbyMap.cam;
+    cam.aspect = aspect; cam.updateProjectionMatrix();
+    cam.position.set(cx - 4.6 * Math.cos(o), 1.45 + Math.sin(lobby.t * 0.11) * 0.08, cz + 4.6 * Math.sin(o));
+    cam.lookAt(cx + 0.3, 1.2, cz);
+    lobby.actor.pos.set(cx, 0, cz);
+    if (lobbyMap.key) { lobbyMap.key.position.set(cam.position.x + 0.6, 3.2, cam.position.z + 1.5); lobbyMap.key.target.position.set(cx, 1.1, cz); lobbyMap.rim.position.set(cx + 1.6, 2.2, cz - 1.2); }
+    lobby.actor.yaw = Math.atan2(-(cam.position.x - cx), -(cam.position.z - cz)) + 0.45;
+    lobby.char.update(dt, lobby.actor);
+    if (lobbyMap.map.updateLights) lobbyMap.map.updateLights(cam.position);
+    followShadow(lobbyMap.atmo.sun, lobbyMap.atmo.sunDir, cam.position);
+    lobbyMap.atmo.sky.position.copy(cam.position);
+    renderer.toneMappingExposure = lobbyMap.atmo.exposure;
+    lobbyMap.pipe.render(false);
+    return;
+  }
+  if (lobby.char && lobby.char.root.parent !== lobby.scene) lobby.scene.add(lobby.char.root);
   if (lobby.mode === 'char' && lobby.char) {
     lobby.char.update(dt, lobby.actor);
     lobby.camera.position.set(0.1 + Math.sin(lobby.t * 0.15) * 0.08, 1.45, 5.6);
@@ -151,7 +203,7 @@ async function renderMapThumb(id) {
   const at = setupAtmosphere(renderer, sc, MAPS[id], 'medium', await loadHDRI(MAPS[id].hdri));
   await texturesReady();
   const cam = new THREE.PerspectiveCamera(60, canvas.width / canvas.height, 0.1, 1000);
-  const [p, t] = THUMB_CAM[id];
+  const [p, t] = THUMB_CAM[id] || [[-37, 6, 5], [0, 4, -1]];
   cam.position.set(...p); cam.lookAt(...t);
   at.sky.position.copy(cam.position);
   renderer.toneMappingExposure = at.exposure;
@@ -177,7 +229,7 @@ function goto(name) {
   document.querySelectorAll('#nav button').forEach(b => b.classList.toggle('on', b.dataset.goto === name));
   setLobbyMode(['loadout', 'inventory', 'cases'].includes(name) ? 'weapon' : 'char');
   renderTopbar();
-  ({ play: renderPlay, loadout: renderLoadout, inventory: renderInventory, cases: renderCases, store: renderStore, profile: renderProfile, settings: renderSettings }[name] || (() => {}))();
+  ({ pass: renderPass, play: renderPlay, loadout: renderLoadout, inventory: renderInventory, cases: renderCases, store: renderStore, profile: renderProfile, settings: renderSettings }[name] || (() => {}))();
 }
 document.querySelectorAll('[data-goto]').forEach(b => b.addEventListener('click', () => goto(b.dataset.goto)));
 
@@ -187,6 +239,7 @@ function renderTopbar() {
   $('gold').textContent = profile.gold.toLocaleString('ru');
   $('lvl').textContent = 'Ур. ' + li.level; $('rank').textContent = li.rank;
   $('xp-fill').style.width = (li.cur / li.need * 100) + '%';
+  $('tb-rank').innerHTML = rankBadge(profile.rating || 0, 40);
   $('nick').textContent = settings.nickname; $('avatar').textContent = (settings.nickname || 'M')[0].toUpperCase();
 }
 
@@ -201,11 +254,22 @@ const OPTIONS = {
 };
 function renderPlay() {
   const m = settings.match;
-  $('modes').innerHTML = Object.values(MODES).map(md => `<button class="mode-card ${m.mode === md.id ? 'on' : ''}" data-mode="${md.id}" style="--mc:${md.color}"><b>${md.name}</b><small>${md.desc}</small></button>`).join('');
+  $('modes').innerHTML = Object.values(MODES).map(md => `<button class="mode-card ${md.id === 'ranked' ? 'ranked' : ''} ${m.mode === md.id ? 'on' : ''}" data-mode="${md.id}" style="--mc:${md.color}"><b>${md.name}</b><small>${md.id === 'ranked' ? rankOf(profile.rating || 0).name + ' · ' + (profile.rating || 0) + ' RP' : md.desc}</small>${md.id === 'ranked' ? `<span class="mc-rank">${rankBadge(profile.rating || 0, 44)}</span>` : ''}</button>`).join('');
   $('modes').querySelectorAll('.mode-card').forEach(b => b.onclick = () => { m.mode = b.dataset.mode; saveSettings(); sound.uiClick(); renderPlay(); });
   const seg = (key, opts) => `<div class="seg" data-opt="${key}">${opts.map(([v, l]) => `<button data-v="${v}" class="${m[key] == v ? 'on' : ''}">${l}</button>`).join('')}</div>`;
   const rows = [];
   rows.push(`<div class="row"><label>Карта</label><div class="maps">${Object.values(MAPS).map(mp => `<button class="map-card ${m.map === mp.id ? 'on' : ''}" data-map="${mp.id}">${mapThumbs[mp.id] ? `<img class="thumb" src="${mapThumbs[mp.id]}">` : '<div class="thumb"></div>'}<div class="info"><b>${mp.name}</b></div></button>`).join('')}</div></div>`);
+  if (m.mode === 'ranked') {
+    const rk = rankOf(profile.rating || 0);
+    const prev = rk.next ? (rk.next - 100) : rk.rating;
+    const prog = rk.next ? Math.max(0, Math.min(1, (rk.rating - prev) / 100)) : 1;
+    rows.unshift(`<div class="rank-box">${rankBadge(rk.rating, 64)}<div style="flex:1"><b style="color:${rk.color}">${rk.name}</b><div class="hint">${rk.rating} RP${rk.next ? ` · до следующего ${rk.next - rk.rating} RP` : ''}</div><div class="rank-bar"><i style="width:${prog * 100}%"></i></div></div></div>
+      <div class="hint">${SEASON.name} · ${SEASON.ends}<br>Матчей: ${profile.rankedPlayed || 0} · побед: ${profile.rankedWins || 0} · лучший: ${rankOf(profile.bestRating || 0).name}<br>Закладка бомбы 5×5, MR12. Сила ботов зависит от звания.</div>`);
+    $('match-card').innerHTML = `<div class="card-title">${MODES[m.mode].name}</div>` + rows.join('');
+    $('match-card').querySelectorAll('.map-card').forEach(b => b.onclick = () => { m.map = b.dataset.map; saveSettings(); sound.uiClick(); renderPlay(); setLobbyMap(m.map); });
+    $('start-sub').textContent = `${MAPS[m.map].name} · рейтинг · ${rk.name}`;
+    return;
+  }
   if (m.mode !== 'ffa') rows.push(`<div class="row"><label>Сторона</label>${seg('side', OPTIONS.side)}</div>`);
   rows.push(`<div class="row"><label>${m.mode === 'ffa' || m.mode === 'gungame' ? 'Игроков (×2)' : 'Игроков в команде'}</label>${seg('perTeam', OPTIONS.perTeam)}</div>`);
   rows.push(`<div class="row"><label>Сложность ботов</label>${seg('difficulty', OPTIONS.difficulty)}</div>`);
@@ -217,7 +281,7 @@ function renderPlay() {
     m[key] = isNaN(+v) ? v : +v; saveSettings(); sound.uiClick(); renderPlay();
     if (key === 'side' && v !== 'auto') setLobbyTeam(v);
   }));
-  $('match-card').querySelectorAll('.map-card').forEach(b => b.onclick = () => { m.map = b.dataset.map; saveSettings(); sound.uiClick(); renderPlay(); });
+  $('match-card').querySelectorAll('.map-card').forEach(b => b.onclick = () => { m.map = b.dataset.map; saveSettings(); sound.uiClick(); renderPlay(); setLobbyMap(m.map); });
   $('start-sub').textContent = `${MAPS[m.map].name} · ${m.mode === 'ffa' || m.mode === 'gungame' ? m.perTeam * 2 + ' игроков' : m.perTeam + ' на ' + m.perTeam} · ${DIFFICULTY[m.difficulty].name}`;
 }
 
@@ -369,6 +433,32 @@ function startCaseOpen(c) {
 }
 $('case-close').onclick = () => { $('case-open').classList.add('hidden'); renderCases(); };
 $('case-sell').onclick = () => { if (lastOpened && !lastOpened.duplicate) { const v = sellSkin(lastOpened.skin.id); toast(`Продано за ◈ ${v}`); } $('case-open').classList.add('hidden'); renderCases(); };
+
+// ---------- Боевой пропуск ----------
+function rewardHtml(it) {
+  if (it.skin) { const sk = ALL_SKINS[it.skin]; return `<div class="ic">${iconImg(sk.weapon)}</div><div style="color:${RARITY[sk.rarity].color};font-weight:700">${itemName(sk.weapon).split(' «')[0]} | ${sk.name}</div>`; }
+  if (it.cases) { const [c] = Object.keys(it.cases); return `<div class="ic">📦</div><div>${CASES.find(x => x.id === c).name}</div>`; }
+  if (it.gold) return `<div class="ic" style="color:var(--gold)">●</div><div>${it.gold} золота</div>`;
+  return `<div class="ic" style="color:var(--cr)">◈</div><div>${it.credits} кредитов</div>`;
+}
+function renderPass() {
+  setLobbyMode('char');
+  const lvl = passLevel(), xp = (profile.passXp || 0) % PASS_XP;
+  $('pass-season').textContent = SEASON.name + ' · ' + SEASON.ends;
+  $('pass-top').innerHTML = `<div class="lvl">${lvl}/${PASS.length}</div><div style="flex:1"><div class="hint">Опыт за матчи открывает уровни. ${lvl < PASS.length ? `До следующего: ${PASS_XP - xp} опыта` : 'Пропуск пройден!'}</div><div class="bar"><i style="width:${lvl >= PASS.length ? 100 : xp / PASS_XP * 100}%"></i></div></div>
+    ${profile.passPremium ? '<span class="btn ghost">Премиум активен ✓</span>' : '<button class="btn" id="pass-buy" style="background:var(--gold)">Премиум-пропуск · 0 ₴</button>'}`;
+  const pb = $('pass-buy'); if (pb) pb.onclick = () => { profile.passPremium = true; saveProfile(); sound.reward(); toast('Премиум-пропуск активирован'); renderPass(); };
+  $('pass-track').innerHTML = PASS.map(p => {
+    const got = lvl >= p.lvl;
+    const cell = (it, tr) => {
+      const claimed = profile.passClaimed[p.lvl + tr];
+      const lock = tr === 'p' && !profile.passPremium;
+      return `<div class="pcell ${tr === 'p' ? 'prem' : ''} ${lock ? 'lock' : ''}">${rewardHtml(it)}${claimed ? '<span class="done">Получено</span>' : `<button data-l="${p.lvl}" data-t="${tr}" ${got && !lock ? '' : 'disabled'}>Забрать</button>`}</div>`;
+    };
+    return `<div class="pass-col ${got ? 'got' : ''}"><div class="num">${p.lvl}</div>${cell(p.free, 'f')}${cell(p.prem, 'p')}</div>`;
+  }).join('');
+  $('pass-track').querySelectorAll('button[data-l]').forEach(b => b.onclick = () => { const it = claimPass(+b.dataset.l, b.dataset.t); if (it) { sound.reward(); toast('Награда получена'); renderTopbar(); renderPass(); } });
+}
 
 // ---------- Магазин ----------
 function renderStore() {
@@ -633,6 +723,7 @@ $('buy-close').onclick = () => toggleBuy(false);
 // ---------- Матч ----------
 async function startMatch() {
   sound.init();
+  disposeLobbyMap();
   if (game) { game.dispose(); game = null; }
   $('menu').classList.add('hidden');
   ['pause', 'end', 'modal'].forEach(id => $(id).classList.add('hidden'));
@@ -650,8 +741,9 @@ async function startMatch() {
   $('hud').classList.toggle('touch', input.touch);
   input.buildTouchUI($('touch-ui'));
   hud.applyCrosshair();
-  game = new Game(renderer, input, hud, { ...m, mode: m.mode }, { onEnd: onMatchEnd, onBuyMenu: () => toggleBuy(), isBuyOpen }, hdri);
-  hud.setMoney(m.mode === 'defuse' ? game.player.money : null);
+  const cfg = m.mode === 'ranked' ? { ...m, mode: 'defuse', ranked: true, rounds: 12, perTeam: 5, side: 'auto', difficulty: rankOf(profile.rating || 0).bots } : { ...m };
+  game = new Game(renderer, input, hud, cfg, { onEnd: onMatchEnd, onBuyMenu: () => toggleBuy(), isBuyOpen }, hdri);
+  hud.setMoney(cfg.mode === 'defuse' ? game.player.money : null);
   game.resize(innerWidth, innerHeight);
   await texturesReady();
   game.update(0.001); game.render();
@@ -692,6 +784,7 @@ function quitToMenu() {
   $('menu').classList.remove('hidden');
   renderer.shadowMap.enabled = true;
   goto('play');
+  setLobbyMap(settings.match.map);
 }
 
 function onMatchEnd({ win, draw, earned, xp, player, game: g }) {
@@ -703,6 +796,18 @@ function onMatchEnd({ win, draw, earned, xp, player, game: g }) {
   const after = levelInfo(profile.xp).level;
   const lvlReward = after > before ? (after - before) : 0;
   if (lvlReward) { profile.gold += 50 * lvlReward; profile.cases.field = (profile.cases.field || 0) + lvlReward; }
+  profile.passXp = (profile.passXp || 0) + xp;
+  let rankHtml = '';
+  if (g.cfg.ranked) {
+    const before = profile.rating || 0;
+    const perf = Math.min(10, player.kills) + Math.min(5, player.assists);
+    const delta = draw ? 3 : win ? 20 + Math.round(perf * 0.8) : -Math.max(12, 26 - Math.round(perf * 0.8));
+    profile.rating = Math.max(0, before + delta);
+    profile.rankedPlayed = (profile.rankedPlayed || 0) + 1; if (win) profile.rankedWins = (profile.rankedWins || 0) + 1;
+    profile.bestRating = Math.max(profile.bestRating || 0, profile.rating);
+    const r0 = rankOf(before), r1 = rankOf(profile.rating);
+    rankHtml = `<div class="rank-box" style="justify-content:center">${rankBadge(profile.rating, 72)}<div style="text-align:left"><b style="color:${r1.color}">${r1.name}</b><div class="rank-delta ${delta >= 0 ? 'up' : 'down'}">${delta >= 0 ? '+' : ''}${delta} RP</div>${r0.name !== r1.name ? `<div class="hint">${r1.tier > r0.tier || (r1.tier === r0.tier && r1.div < r0.div) ? 'Повышение звания!' : 'Понижение звания'}</div>` : ''}</div></div>`;
+  }
   const st = profile.stats;
   st.kills += player.kills; st.deaths += player.deaths; st.headshots += player.headshots; st.matches++; st.damage = (st.damage || 0) + player.damage; if (win) st.wins++;
   profile.history = [...(profile.history || []), { win, draw, mode: g.mode, map: g.cfg.map, k: player.kills, d: player.deaths, score: g.mode === 'defuse' || g.mode === 'tdm' ? `${g.score[player.team]}:${g.score[player.team === 'A' ? 'B' : 'A']}` : '' }].slice(-30);
@@ -712,7 +817,7 @@ function onMatchEnd({ win, draw, earned, xp, player, game: g }) {
   $('end-score').innerHTML = g.mode === 'ffa' || g.mode === 'gungame' ? `Место: ${g.ranking().indexOf(player) + 1} из ${g.actors.length}`
     : `<span style="color:var(--a)">${g.score[player.team]}</span> : <span style="color:var(--b)">${g.score[player.team === 'A' ? 'B' : 'A']}</span>`;
   const kd = (player.kills / Math.max(1, player.deaths)).toFixed(2);
-  $('end-stats').innerHTML = `<div class="end-stats"><div>Убийства<b>${player.kills}</b></div><div>Ассисты<b>${player.assists}</b></div><div>Смерти<b>${player.deaths}</b></div><div>K/D<b>${kd}</b></div><div>Урон<b>${Math.round(player.damage)}</b></div></div>
+  $('end-stats').innerHTML = rankHtml + `<div class="end-stats"><div>Убийства<b>${player.kills}</b></div><div>Ассисты<b>${player.assists}</b></div><div>Смерти<b>${player.deaths}</b></div><div>K/D<b>${kd}</b></div><div>Урон<b>${Math.round(player.damage)}</b></div></div>
     <div class="reward">Награда: <span style="color:var(--cr)">◈ ${earned * 10}</span> · <span style="color:var(--accent2)">+${xp} опыта</span>${lvlReward ? ` · <span style="color:var(--gold)">Новый уровень! +● ${50 * lvlReward} и кейс</span>` : ''}</div>`;
   $('end').classList.remove('hidden');
   renderTopbar();
@@ -761,6 +866,8 @@ async function boot() {
   }
   lf.style.width = '100%';
   if (settings.match.side && settings.match.side !== 'auto') setLobbyTeam(settings.match.side);
+  lt.textContent = 'Подготовка лобби…';
+  await setLobbyMap(settings.match.map);
   goto('play');
   $('loading').classList.add('hidden');
   if (dailyAvailable()) setTimeout(() => toast('Доступна ежедневная награда — загляните в магазин'), 1200);

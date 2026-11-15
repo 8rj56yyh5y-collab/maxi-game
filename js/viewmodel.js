@@ -1,13 +1,12 @@
 // Оружие в руках (вид от первого лица). Отдельная сцена поверх мира.
 import * as THREE from 'three';
-import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
 import { buildWeaponModel } from './weapons.js';
 import { WEAPONS, KNIVES } from './data.js';
-import { TEAM_STYLE } from './character.js';
+import { CharacterModel, solveIK, aimBone } from './character.js';
 import { surface } from './textures.js';
 
 // Положение точки хвата относительно глаза
-const HIP = { pistol: [0.1, -0.12, -0.38], smg: [0.105, -0.13, -0.24], rifle: [0.105, -0.135, -0.22], sniper: [0.105, -0.13, -0.2], shotgun: [0.105, -0.13, -0.23], knife: [0.12, -0.12, -0.24], grenade: [0.12, -0.12, -0.25] };
+const HIP = { pistol: [0.1, -0.12, -0.38], smg: [0.105, -0.13, -0.24], rifle: [0.105, -0.135, -0.22], sniper: [0.105, -0.13, -0.2], shotgun: [0.105, -0.13, -0.23], knife: [0.13, -0.13, -0.34], grenade: [0.12, -0.12, -0.3] };
 const ADS_Z = { pistol: -0.38, smg: -0.15, rifle: -0.14, sniper: -0.1, shotgun: -0.16 };
 
 function category(id) {
@@ -71,53 +70,8 @@ export class ViewModel {
     this.gun = gun;
     this.ud = ud;
     this.sightOff = (ud.sightY || 0) - (ud.gripR ? ud.gripR.y : 0);
-    const st = TEAM_STYLE[team] || TEAM_STYLE.A;
-    const sleeve = sleeveMaterial(st.uniform);
-    const cuff = new THREE.MeshStandardMaterial({ color: st.gear, roughness: 0.8 });
-    const glove = new THREE.MeshStandardMaterial({ color: st.glove, roughness: 0.62, metalness: 0.05 });
-    const knuckle = new THREE.MeshStandardMaterial({ color: 0x2a2c30, roughness: 0.5 });
-    const seg = (a, b, r0, r1, m, parent = this.pivot) => {
-      const len = a.distanceTo(b);
-      const g = new THREE.CylinderGeometry(r1, r0, len, 14); g.rotateX(Math.PI / 2); g.translate(0, 0, len / 2);
-      const mesh = new THREE.Mesh(g, m);
-      mesh.position.copy(a); mesh.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, 1), b.clone().sub(a).normalize());
-      parent.add(mesh);
-      return mesh;
-    };
-    const hand = (H, dir, right, parent) => {
-      const g = new THREE.Group(); g.position.copy(H);
-      g.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, 1), dir);
-      const palm = new THREE.Mesh(new RoundedBoxGeometry(0.06, 0.075, 0.08, 2, 0.02), glove); palm.position.set(right ? 0.01 : -0.01, 0, 0.03); g.add(palm);
-      const k = new THREE.Mesh(new RoundedBoxGeometry(0.02, 0.07, 0.03, 2, 0.008), knuckle); k.position.set(right ? 0.044 : -0.044, 0.005, 0.025); g.add(k);
-      for (let f = 0; f < 4; f++) {
-        const f1 = new THREE.Mesh(new RoundedBoxGeometry(0.02, 0.019, 0.04, 2, 0.008), glove);
-        f1.position.set((right ? -1 : 1) * 0.028, 0.03 - f * 0.02, 0.0); f1.rotation.y = (right ? 1 : -1) * 0.9; g.add(f1);
-      }
-      const th = new THREE.Mesh(new RoundedBoxGeometry(0.022, 0.022, 0.06, 2, 0.009), glove); th.position.set((right ? 1 : -1) * 0.03, 0.045, -0.005); th.rotation.x = 0.3; g.add(th);
-      parent.add(g);
-      return g;
-    };
-    const mkArm = (H, E, S, right) => {
-      const dirFore = E.clone().sub(H).normalize();
-      const grp = new THREE.Group(); this.pivot.add(grp);
-      hand(H, dirFore, right, grp);
-      const wrist = H.clone().addScaledVector(dirFore, 0.075);
-      seg(wrist, wrist.clone().addScaledVector(dirFore, 0.03), 0.042, 0.042, right ? knuckle : cuff, grp);
-      seg(wrist.clone().addScaledVector(dirFore, 0.03), E, 0.05, 0.062, sleeve, grp);
-      seg(wrist.clone().addScaledVector(dirFore, 0.02), wrist.clone().addScaledVector(dirFore, 0.07), 0.058, 0.058, cuff, grp);
-      const elbow = new THREE.Mesh(new THREE.SphereGeometry(0.064, 14, 10), sleeve); elbow.position.copy(E); grp.add(elbow);
-      seg(E, S, 0.064, 0.075, sleeve, grp);
-      return grp;
-    };
-    const R = new THREE.Vector3(0, 0, 0);
-    this.rightArm = mkArm(R, new THREE.Vector3(0.08, -0.17, 0.25), new THREE.Vector3(0.14, -0.45, 0.62), true);
-    this.leftArm = null;
-    if (ud.gripL) {
-      const L = ud.gripL.clone().sub(ud.gripR);
-      const E = this.cat === 'pistol' ? new THREE.Vector3(-0.1, -0.17, 0.22) : new THREE.Vector3(L.x - 0.16, L.y - 0.2, L.z + 0.2);
-      this.leftArm = mkArm(L, E, new THREE.Vector3(-0.3, -0.48, 0.4), false);
-      this.leftRest = this.leftArm.position.clone();
-    }
+    this.ensureBody(team);
+    this.leftOffset = new THREE.Vector3();
     this.muzzle = ud.muzzle;
     this.muzzle.add(this.flash);
     this.switchT = 1; this.reloadT = 0; this.boltT = 0; this.throwT = 0;
@@ -172,12 +126,8 @@ export class ViewModel {
       const s = Math.sin(Math.min(1, p) * Math.PI);
       drop += s * 0.04; rx += s * 0.2; rz += s * 0.55; ry += s * 0.15;
       magOff = p < 0.25 ? p / 0.25 : p < 0.55 ? 1 : p < 0.8 ? 1 - (p - 0.55) / 0.25 : 0;
-      if (this.leftArm) {
-        const mp = this.ud.mag ? this.ud.mag.getWorldPosition(new THREE.Vector3()) : null;
-        this.leftArm.position.set(this.leftRest.x + 0.02 * s, this.leftRest.y - 0.08 * magOff, this.leftRest.z + 0.12 * s);
-        void mp;
-      }
-    } else if (this.leftArm) this.leftArm.position.copy(this.leftRest);
+      this.leftOffset.set(0.02 * s, -0.12 * magOff, 0.18 * s);
+    } else this.leftOffset.set(0, 0, 0);
     if (this.ud && this.ud.mag && this.ud.magRest) {
       this.ud.mag.position.copy(this.ud.magRest);
       this.ud.mag.position.y -= magOff * 0.25;
@@ -212,9 +162,10 @@ export class ViewModel {
       hip[1] + (ads[1] - hip[1]) * a + by + sy - drop - crouchOff,
       hip[2] + (ads[2] - hip[2]) * a + this.kick * 0.03 * (1 - a * 0.5),
     );
-    this.holder.rotation.set(0, (1 - a) * 0.13, (1 - a) * 0.04);
+    this.holder.rotation.set(0, (1 - a) * 0.06, (1 - a) * 0.03);
     this.pivot.rotation.set(rx, ry, rz);
     this.holder.visible = !scoped;
+    this.poseBody(dt, scoped);
     this.flashT -= dt;
     this.flash.visible = this.flashT > 0;
     this.flashLight.intensity = this.flashT > 0 ? 2.5 : 0;
@@ -226,6 +177,48 @@ export class ViewModel {
       s.m.rotation.x += s.w.x * dt; s.m.rotation.y += s.w.y * dt;
       if (s.t <= 0) s.m.visible = false;
     }
+  }
+
+  // Тело бойца (руки в броне и перчатках) от первого лица
+  ensureBody(team) {
+    if (this.body && this.bodyTeam === team) return;
+    if (this.body) this.scene.remove(this.body.root);
+    this.body = new CharacterModel(team);
+    this.bodyTeam = team;
+    this.body.gun.visible = false;
+    const B = this.body.bones;
+    B.head.scale.setScalar(0.001);
+    this.body.root.traverse(o => { if (o.isMesh) { o.castShadow = false; o.receiveShadow = false; if (/visor/i.test(o.name) || /Visor/.test(o.material.name)) o.visible = false; } });
+    B.neck = this.body.model.getObjectByName('mixamorigNeck');
+    if (B.neck) B.neck.scale.setScalar(0.001);
+    this.scene.add(this.body.root);
+    this.body.model.updateMatrixWorld(true);
+    this.eyeY = B.head.getWorldPosition(new THREE.Vector3()).y + 0.06;
+  }
+
+  poseBody(dt, scoped) {
+    const ch = this.body; if (!ch) return;
+    const B = ch.bones;
+    ch.root.visible = !scoped && this.holder.visible;
+    if (!ch.root.visible) return;
+    ch.mixer.update(dt * 0.6);
+    ch.root.position.set(0.02, -this.eyeY - 0.1, 0.32);
+    ch.root.rotation.set(0, 0, 0);
+    ch.root.updateMatrixWorld(true);
+    this.gun.updateMatrixWorld(true);
+    const ud = this.ud;
+    const tR = this.gun.localToWorld(ud.gripR.clone());
+    const right = new THREE.Vector3(1, 0, 0);
+    solveIK(B.rArm, B.rFore, B.rHand, tR, new THREE.Vector3(0.7, -1, 0.3), ch.len.ua, ch.len.fa);
+    const gq = this.gun.getWorldQuaternion(new THREE.Quaternion());
+    const gLeft = new THREE.Vector3(-1, 0, 0).applyQuaternion(gq), gDown = new THREE.Vector3(0, -1, 0).applyQuaternion(gq), gFwd = new THREE.Vector3(0, 0, -1).applyQuaternion(gq);
+    aimBone(B.rHand, B.rFing.getWorldPosition(new THREE.Vector3()), tR.clone().addScaledVector(gLeft, 0.1).addScaledVector(gDown, 0.05).addScaledVector(gFwd, 0.03));
+    let tL;
+    if (ud.gripL) tL = this.gun.localToWorld(ud.gripL.clone()).add(this.leftOffset);
+    else tL = new THREE.Vector3(-0.32, -0.55, -0.05);
+    solveIK(B.lArm, B.lFore, B.lHand, tL, new THREE.Vector3(-0.8, -1, 0.2), ch.len.ua, ch.len.fa);
+    if (ud.gripL) aimBone(B.lHand, B.lFing.getWorldPosition(new THREE.Vector3()), tL.clone().addScaledVector(gLeft, -0.1).addScaledVector(gFwd, 0.04));
+    void right;
   }
 
   muzzleWorld(target) {

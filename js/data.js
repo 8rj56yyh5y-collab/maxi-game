@@ -69,6 +69,7 @@ export const ECON = {
 
 // ---------- Режимы ----------
 export const MODES = {
+  ranked: { id: 'ranked', name: 'Рейтинговая игра', short: 'РЕЙТИНГ', desc: 'Закладка бомбы 5×5 на рейтинг. Побеждайте, чтобы повышать звание.', color: '#ffc23d' },
   defuse: { id: 'defuse', name: 'Закладка бомбы', short: 'ЗАКЛАДКА', desc: 'Раунды, экономика, закупка. Наёмники закладывают бомбу, спецназ обезвреживает.', color: '#ff9f1c' },
   tdm:    { id: 'tdm', name: 'Командный бой', short: 'КОМАНДНЫЙ', desc: 'Возрождение, оружие из снаряжения. Побеждает команда, набравшая больше убийств.', color: '#2ec4ff' },
   ffa:    { id: 'ffa', name: 'Каждый сам за себя', short: 'DM', desc: 'Все против всех. Тренировка стрельбы и реакции.', color: '#ff4d6d' },
@@ -108,6 +109,20 @@ export const STYLES = [
   { key: 'dragon',  name: 'Золотой дракон', rarity: 'mythic',    pattern: 'dragon',   colors: ['#ffd76a', '#8a5a00', '#c98a00'], glow: '#ffaa00' },
   { key: 'lava',    name: 'Лава',           rarity: 'mythic',    pattern: 'neon',     colors: ['#1a0500', '#ff4a00', '#ffcc00'], glow: '#ff3300' },
   { key: 'void',    name: 'Бездна',         rarity: 'mythic',    pattern: 'galaxy',   colors: ['#000000', '#7b2ff7', '#00e5ff'] },
+  { key: 'sakura',  name: 'Сакура',         rarity: 'rare',      pattern: 'camo',     colors: ['#f7d6e0', '#e98fb0', '#ffffff'], theme: 'tokyo' },
+  { key: 'koi',     name: 'Кои',            rarity: 'epic',      pattern: 'gradient', colors: ['#ff7a18', '#fff1e0', '#c8102e'], theme: 'tokyo' },
+  { key: 'shibuya', name: 'Сибуя',          rarity: 'legendary', pattern: 'neon',     colors: ['#120a1f', '#ff3ea5', '#3ef0ff'], glow: '#ff3ea5', theme: 'tokyo' },
+  { key: 'oni',     name: 'Они',            rarity: 'mythic',    pattern: 'tiger',    colors: ['#8a0f14', '#120808'], theme: 'tokyo' },
+  { key: 'marble',  name: 'Мрамор',         rarity: 'rare',      pattern: 'camo',     colors: ['#f2efe8', '#c9c4ba', '#8a857c'], theme: 'europe' },
+  { key: 'royal',   name: 'Королевский',    rarity: 'epic',      pattern: 'dragon',   colors: ['#1b2a5a', '#d4af37', '#0d1533'], theme: 'europe' },
+  { key: 'venice',  name: 'Венеция',        rarity: 'legendary', pattern: 'gradient', colors: ['#0b4f6c', '#f4d35e', '#ee964b'], theme: 'europe' },
+  { key: 'gilded',  name: 'Позолота',       rarity: 'mythic',    pattern: 'carbon',   colors: ['#b8860b', '#ffd700', '#ffffff'], glow: '#ffcc33', theme: 'europe' },
+  { key: 'vice',    name: 'Вайс-Сити',      rarity: 'rare',      pattern: 'stripes',  colors: ['#ff7aa8', '#3ec8d8'], theme: 'miami' },
+  { key: 'flamingo',name: 'Фламинго',       rarity: 'epic',      pattern: 'gradient', colors: ['#ff4f9a', '#ffd1e3', '#ff8fb8'], theme: 'miami' },
+  { key: 'retro',   name: 'Ретровейв',      rarity: 'legendary', pattern: 'neon',     colors: ['#1a0533', '#ff6ec7', '#ffd319'], glow: '#ff6ec7', theme: 'miami' },
+  { key: 'momiji',  name: 'Момидзи',        rarity: 'epic',      pattern: 'camo',     colors: ['#d2401e', '#f0a030', '#5a1e0e'], theme: 'kyoto' },
+  { key: 'geisha',  name: 'Гейша',          rarity: 'legendary', pattern: 'gradient', colors: ['#f4f0ea', '#b8202a', '#1a1a1a'], theme: 'kyoto' },
+  { key: 'shogun',  name: 'Сёгун',          rarity: 'mythic',    pattern: 'dragon',   colors: ['#2a0a0a', '#d4af37', '#8a1010'], glow: '#ffb000', theme: 'kyoto' },
 ];
 
 function hash(s) { let h = 2166136261; for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619); } return h >>> 0; }
@@ -122,7 +137,7 @@ for (const w of allItems) {
     // ножи на редкость выше
     let rarity = st.rarity;
     if (KNIVES[w]) rarity = RARITY_ORDER[Math.min(4, RARITY_ORDER.indexOf(st.rarity) + 1)];
-    SKINS[id] = { id, weapon: w, name: st.name, rarity, pattern: st.pattern, colors: st.colors, glow: st.glow };
+    SKINS[id] = { id, weapon: w, name: st.name, rarity, pattern: st.pattern, colors: st.colors, glow: st.glow, theme: st.theme, style: st.key };
   }
 }
 
@@ -137,6 +152,16 @@ export const CASES = [
     weights: { common: 40, rare: 34, epic: 18, legendary: 6, mythic: 2 } },
   { id: 'elite',  name: 'Элитный кейс',   price: 250, currency: 'gold', color: '#8847ff', filter: (s) => !KNIVES[s.weapon],
     weights: { common: 18, rare: 36, epic: 28, legendary: 13, mythic: 5 }, knifeChance: 0.03 },
+  { id: 'tokyo',  name: 'Кейс «Токио»',   price: 180, currency: 'gold', color: '#ff3ea5', filter: (s) => !KNIVES[s.weapon] && (s.theme === 'tokyo' || ['neon', 'cyber', 'toxic'].includes(s.style)),
+    weights: { rare: 45, epic: 32, legendary: 17, mythic: 6 } },
+  { id: 'europe', name: 'Кейс «Европа»',  price: 150, currency: 'gold', color: '#d4af37', filter: (s) => !KNIVES[s.weapon] && (s.theme === 'europe' || ['navy', 'cherry', 'sunset'].includes(s.style)),
+    weights: { rare: 48, epic: 32, legendary: 15, mythic: 5 } },
+  { id: 'miami',  name: 'Кейс «Майами»',  price: 160, currency: 'gold', color: '#ff6ec7', filter: (s) => !KNIVES[s.weapon] && (s.theme === 'miami' || ['sunset', 'neon', 'ice'].includes(s.style)),
+    weights: { rare: 46, epic: 32, legendary: 16, mythic: 6 } },
+  { id: 'kyoto',  name: 'Кейс «Киото»',   price: 200, currency: 'gold', color: '#d2401e', filter: (s) => !KNIVES[s.weapon] && (s.theme === 'kyoto' || ['sakura', 'koi', 'ronin', 'dragon'].includes(s.style)),
+    weights: { rare: 40, epic: 34, legendary: 19, mythic: 7 }, knifeChance: 0.02 },
+  { id: 'starter', name: 'Кейс новичка', price: 0, currency: 'credits', creditPrice: 120, color: '#7a8a9a', filter: (s) => !KNIVES[s.weapon] && ['common', 'rare'].includes(s.rarity),
+    weights: { common: 75, rare: 25 } },
   { id: 'blade',  name: 'Кейс «Клинок»',  price: 500, currency: 'gold', color: '#ffb400', filter: (s) => !!KNIVES[s.weapon] && s.weapon !== 'knife',
     weights: { epic: 40, legendary: 42, mythic: 18 } },
 ];
@@ -150,6 +175,8 @@ export const STORE = [
   { id: 'cr5000',   title: '5 000 кредитов',      credits: 5000, price: 0, tag: '' },
   { id: 'starter',  title: 'Набор новичка',       gold: 500, credits: 3000, cases: { elite: 2 }, price: 0, tag: 'Один раз', once: true },
   { id: 'knifepack',title: 'Набор «Клинок»',      gold: 300, cases: { blade: 1 }, price: 0, tag: 'Ножи' },
+  { id: 'citypack', title: 'Набор «Города мира»', gold: 200, cases: { tokyo: 1, europe: 1, miami: 1, kyoto: 1 }, price: 0, tag: 'Новинка' },
+  { id: 'cr20000',  title: '20 000 кредитов',     credits: 20000, price: 0, tag: 'Выгодно' },
 ];
 
 // ---------- Уровни ----------
@@ -164,4 +191,51 @@ export function levelInfo(xp) {
 export const MAP_INFO = {
   oasis: { name: 'Оазис', desc: 'Пустынный город. Две точки, три линии.', modes: ['defuse', 'tdm', 'ffa', 'gungame'] },
   port:  { name: 'Порт', desc: 'Контейнерный терминал на закате.', modes: ['defuse', 'tdm', 'ffa', 'gungame'] },
+  tokyo: { name: 'Токио', desc: 'Ночной квартал с неоном.', modes: ['defuse', 'tdm', 'ffa', 'gungame'] },
+  oldtown: { name: 'Старый город', desc: 'Европейская площадь на закате.', modes: ['defuse', 'tdm', 'ffa', 'gungame'] },
+  brooklyn: { name: 'Бруклин', desc: 'Нью-Йорк: авеню и переулки.', modes: ['defuse', 'tdm', 'ffa', 'gungame'] },
+  santorini: { name: 'Санторини', desc: 'Белые домики над морем.', modes: ['defuse', 'tdm', 'ffa', 'gungame'] },
+  paris: { name: 'Париж', desc: 'Бульвар с кафе на закате.', modes: ['defuse', 'tdm', 'ffa', 'gungame'] },
+  kyoto: { name: 'Киото', desc: 'Гион, пагода, осенний сад.', modes: ['defuse', 'tdm', 'ffa', 'gungame'] },
+  miami: { name: 'Майами', desc: 'Ночной Оушен-драйв.', modes: ['defuse', 'tdm', 'ffa', 'gungame'] },
 };
+
+// ---------- Рейтинговые игры ----------
+export const RANK_TIERS = [
+  { name: 'Бронза', color: '#c07a45', min: 0, bots: 'easy' },
+  { name: 'Серебро', color: '#b8c4cf', min: 300, bots: 'normal' },
+  { name: 'Золото', color: '#ffc23d', min: 600, bots: 'normal' },
+  { name: 'Платина', color: '#4fd6c8', min: 900, bots: 'hard' },
+  { name: 'Алмаз', color: '#6aa8ff', min: 1200, bots: 'hard' },
+  { name: 'Мастер', color: '#b35cff', min: 1500, bots: 'pro' },
+  { name: 'Легенда', color: '#ff4d5e', min: 1800, bots: 'pro' },
+];
+export const SEASON = { name: 'Сезон 1: Неон', ends: 'конец сезона через 42 дня' };
+export function rankOf(rating) {
+  let i = 0;
+  while (i + 1 < RANK_TIERS.length && rating >= RANK_TIERS[i + 1].min) i++;
+  const t = RANK_TIERS[i];
+  const div = i >= 5 ? 0 : 3 - Math.min(2, Math.floor((rating - t.min) / 100));
+  const next = RANK_TIERS[i + 1] ? (div > 1 ? t.min + (4 - div) * 100 : RANK_TIERS[i + 1].min) : null;
+  return { tier: i, name: t.name + (div ? ' ' + ['', 'I', 'II', 'III'][div] : ''), color: t.color, bots: t.bots, div, next, rating };
+}
+// Значок звания (SVG)
+export function rankBadge(rating, size = 48) {
+  const r = rankOf(rating);
+  const stars = r.div ? 4 - r.div : 3;
+  const c = r.color;
+  return `<svg class="rank-badge" width="${size}" height="${size}" viewBox="0 0 64 64"><defs><linearGradient id="rg${r.tier}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${c}"/><stop offset="1" stop-color="#1a1f28"/></linearGradient></defs>
+    <path d="M32 3 L57 13 L57 34 C57 48 45 57 32 61 C19 57 7 48 7 34 L7 13 Z" fill="url(#rg${r.tier})" stroke="${c}" stroke-width="2.5"/>
+    <path d="M32 12 L49 19 L49 34 C49 43 41 50 32 53 C23 50 15 43 15 34 L15 19 Z" fill="rgba(10,14,20,.55)"/>
+    ${r.tier >= 5 ? `<path d="M32 18 l4 9 10 1 -8 6 3 10 -9 -6 -9 6 3 -10 -8 -6 10 -1z" fill="${c}"/>` : Array.from({ length: stars }, (_, i) => `<path transform="translate(${20 + i * 12 - (stars - 1) * 6 + (3 - stars) * 6},35)" d="M0 -7 l2 5 5 .5 -4 3.5 1.5 5 -4.5 -3 -4.5 3 1.5 -5 -4 -3.5 5 -.5z" fill="${c}"/>`).join('')}
+    <text x="32" y="${r.tier >= 5 ? 58 : 27}" text-anchor="middle" font-family="Rajdhani, sans-serif" font-weight="700" font-size="${r.tier >= 5 ? 0 : 9}" fill="#fff">${r.tier >= 5 ? '' : r.name.split(' ')[0].slice(0, 3).toUpperCase()}</text></svg>`;
+}
+
+// ---------- Боевой пропуск ----------
+export const PASS_XP = 600;
+export const PASS = Array.from({ length: 30 }, (_, i) => {
+  const lvl = i + 1;
+  const free = lvl % 5 === 0 ? { cases: { field: 1 } } : lvl % 2 === 0 ? { credits: 500 + lvl * 20 } : { credits: 250 };
+  const prem = lvl === 30 ? { skin: 'karambit_shibuya' } : lvl === 25 ? { skin: 'ak_oni' } : lvl === 20 ? { skin: 'ar4_shibuya' } : lvl % 5 === 0 ? { cases: { tokyo: 1 } } : lvl % 3 === 0 ? { gold: 60 } : { credits: 600 };
+  return { lvl, free, prem };
+});

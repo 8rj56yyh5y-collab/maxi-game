@@ -9,11 +9,37 @@ import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
 import { GTAOPass } from 'three/addons/postprocessing/GTAOPass.js';
 import { settings } from './settings.js';
 
+// Ночное небо: градиент, звёзды, луна
+function nightSky() {
+  const g = new THREE.Group();
+  const geo = new THREE.SphereGeometry(800, 32, 16);
+  const mat = new THREE.ShaderMaterial({
+    side: THREE.BackSide, depthWrite: false, fog: false,
+    uniforms: {},
+    vertexShader: 'varying vec3 vP; void main(){ vP = normalize(position); gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.0); }',
+    fragmentShader: `varying vec3 vP; void main(){ float h = clamp(vP.y, -0.1, 1.0);
+      vec3 top = vec3(0.012, 0.016, 0.05), mid = vec3(0.07, 0.05, 0.16), hor = vec3(0.32, 0.12, 0.28);
+      vec3 c = mix(hor, mid, smoothstep(0.0, 0.18, h)); c = mix(c, top, smoothstep(0.18, 0.75, h));
+      gl_FragColor = vec4(c, 1.0); }`,
+  });
+  g.add(new THREE.Mesh(geo, mat));
+  const n = 1400, pos = new Float32Array(n * 3);
+  for (let i = 0; i < n; i++) {
+    const th = Math.random() * Math.PI * 2, y = 0.08 + Math.random() * 0.92, r = Math.sqrt(1 - y * y);
+    pos[i * 3] = Math.cos(th) * r * 700; pos[i * 3 + 1] = y * 700; pos[i * 3 + 2] = Math.sin(th) * r * 700;
+  }
+  const pg = new THREE.BufferGeometry(); pg.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+  g.add(new THREE.Points(pg, new THREE.PointsMaterial({ color: 0xffffff, size: 1.6, sizeAttenuation: false, fog: false, transparent: true, opacity: 0.85 })));
+  const moon = new THREE.Mesh(new THREE.CircleGeometry(22, 32), new THREE.MeshBasicMaterial({ color: 0xfff6e0, fog: false }));
+  moon.position.set(-250, 380, -450); moon.lookAt(0, 0, 0); g.add(moon);
+  return g;
+}
+
 // Небо + свет + карта окружения для отражений
 export function setupAtmosphere(renderer, scene, def, quality, hdri = null) {
-  const sky = new Sky();
-  sky.scale.setScalar(900);
-  const u = sky.material.uniforms;
+  const sky = def.night ? nightSky() : new Sky();
+  if (!def.night) sky.scale.setScalar(900);
+  const u = def.night ? new Sky().material.uniforms : sky.material.uniforms;
   u.turbidity.value = def.sky.turbidity;
   u.rayleigh.value = def.sky.rayleigh;
   u.mieCoefficient.value = def.sky.mie;

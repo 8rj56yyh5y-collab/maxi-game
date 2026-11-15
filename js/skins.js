@@ -14,6 +14,7 @@ function defaults() {
     loadout: { A: { primary: 'ar4', secondary: 'p9' }, B: { primary: 'ak', secondary: 'p18' } },
     stats: { kills: 0, deaths: 0, headshots: 0, matches: 0, wins: 0, damage: 0, roundsWon: 0, plants: 0, defuses: 0, perWeapon: {} },
     purchases: {}, lastDaily: 0, streak: 0, history: [],
+    rating: 0, rankedPlayed: 0, rankedWins: 0, bestRating: 0, passXp: 0, passPremium: false, passClaimed: {},
   };
 }
 
@@ -136,3 +137,18 @@ export function weaponAvailableFor(team, id) {
 }
 
 export { STORE };
+
+// ---------- Боевой пропуск ----------
+import { PASS, PASS_XP } from './data.js';
+export function passLevel() { return Math.min(PASS.length, Math.floor((profile.passXp || 0) / PASS_XP)); }
+export function claimPass(lvl, track) {
+  const key = lvl + track;
+  if (profile.passClaimed[key] || passLevel() < lvl || (track === 'p' && !profile.passPremium)) return null;
+  const item = PASS[lvl - 1][track === 'p' ? 'prem' : 'free'];
+  profile.credits += item.credits || 0; profile.gold += item.gold || 0;
+  for (const [c, n] of Object.entries(item.cases || {})) profile.cases[c] = (profile.cases[c] || 0) + n;
+  if (item.skin && SKINS[item.skin] && !profile.owned.includes(item.skin)) profile.owned.push(item.skin);
+  profile.passClaimed[key] = true;
+  saveProfile();
+  return item;
+}

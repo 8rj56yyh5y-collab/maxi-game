@@ -1155,6 +1155,7 @@ export class Game {
   }
 
   render() {
+    if (this.map.updateLights) this.map.updateLights(this.camera.position);
     followShadow(this.atmo.sun, this.atmo.sunDir, this.camera.position);
     this.atmo.sky.position.copy(this.camera.position);
     this.pipeline.render(this.player.alive);

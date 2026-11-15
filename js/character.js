@@ -20,7 +20,7 @@ const _e = new THREE.Euler();
 const X = new THREE.Vector3(1, 0, 0);
 
 // Повернуть кость так, чтобы направление (кость → дочерняя точка) смотрело на target
-function aimBone(bone, childWorld, targetWorld) {
+export function aimBone(bone, childWorld, targetWorld) {
   const origin = bone.getWorldPosition(_v1);
   const cur = _v2.subVectors(childWorld, origin).normalize();
   const want = _v3.subVectors(targetWorld, origin).normalize();
@@ -33,7 +33,7 @@ function aimBone(bone, childWorld, targetWorld) {
 }
 
 // 2-звенная IK: upper → lower → end
-function solveIK(upper, lower, end, target, pole, lenA, lenB) {
+export function solveIK(upper, lower, end, target, pole, lenA, lenB) {
   const S = upper.getWorldPosition(new THREE.Vector3());
   const dir = new THREE.Vector3().subVectors(target, S);
   let d = dir.length();

@@ -74,7 +74,7 @@
 <div id="menu">
   <header class="topbar">
     <div class="tb-profile" data-goto="profile">
-      <div class="avatar" id="avatar">M</div>
+      <div class="avatar" id="avatar">M</div><div id="tb-rank"></div>
       <div class="tb-name"><b id="nick">Игрок</b><small><span id="lvl">1</span> · <span id="rank">Новобранец</span></small><div class="xp"><i id="xp-fill"></i></div></div>
     </div>
     <nav id="nav">
@@ -82,6 +82,7 @@
       <button data-goto="loadout"><span>Снаряжение</span></button>
       <button data-goto="inventory"><span>Инвентарь</span></button>
       <button data-goto="cases"><span>Кейсы</span></button>
+      <button data-goto="pass"><span>Пропуск</span></button>
       <button data-goto="store"><span>Магазин</span></button>
     </nav>
     <div class="tb-right">
@@ -126,6 +127,15 @@
     <div class="panel wide">
       <div class="panel-head"><h2>Кейсы</h2></div>
       <div class="case-list" id="case-list"></div>
+    </div>
+  </section>
+
+  <!-- Боевой пропуск -->
+  <section class="screen" id="screen-pass">
+    <div class="panel wide pass-panel">
+      <div class="panel-head"><h2>Боевой пропуск</h2><span class="hint" id="pass-season"></span></div>
+      <div class="pass-top" id="pass-top"></div>
+      <div class="pass-track" id="pass-track"></div>
     </div>
   </section>
 

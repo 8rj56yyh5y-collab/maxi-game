@@ -77,7 +77,8 @@ kbd { font-family: var(--head); font-weight: 700; background: rgba(255,255,255,.
 .match-card { display: flex; flex-direction: column; gap: 8px; max-height: calc(100% - 90px); overflow-y: auto; }
 .match-card .row { display: flex; flex-direction: column; gap: 5px; }
 .match-card label { color: var(--muted); font-size: 11.5px; text-transform: uppercase; letter-spacing: 1.5px; font-weight: 600; }
-.maps { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+.maps { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 6px; max-height: 300px; overflow-y: auto; padding-right: 2px; }
+.maps .map-card b { font-size: 15px; }
 .map-card { border: 2px solid var(--line); overflow: hidden; background: #111; text-align: left; padding: 0; position: relative; }
 .map-card.on { border-color: var(--accent); box-shadow: 0 0 16px rgba(41,182,246,.35); }
 .map-card .thumb { width: 100%; aspect-ratio: 16/8; display: block; object-fit: cover; background: linear-gradient(135deg, #22303f, #121a24); }
@@ -402,3 +403,28 @@ body.can-use .tbtn[data-btn=use] { display: flex; }
 #hud.touch #weapon-panel { right: auto; left: 57%; bottom: 8px; text-align: left; }
 #hud.touch #weapon-slots { display: none; } #hud.touch #reload-bar { margin-left: 0; } #hud.touch .ammo-row { justify-content: flex-start; }
 #hud.touch #killfeed { right: 70px; } #hud.touch #buy-hint kbd, #hud.touch #use-hint kbd { display: none; }
+
+/* Рейтинг */
+#tb-rank svg { display: block; }
+.mode-card.ranked { background: linear-gradient(90deg, rgba(255,194,61,.16), var(--panel)); }
+.mode-card .mc-rank { position: absolute; right: 10px; top: 50%; transform: translateY(-50%); }
+.rank-box { display: flex; align-items: center; gap: 14px; padding: 6px 0 10px; }
+.rank-box b { display: block; font-family: var(--head); font-size: 26px; letter-spacing: 1px; }
+.rank-bar { height: 6px; background: rgba(255,255,255,.1); margin-top: 6px; } .rank-bar i { display: block; height: 100%; background: linear-gradient(90deg, var(--gold), #ff8a3d); }
+.rank-delta { font-family: var(--head); font-size: 30px; font-weight: 700; }
+.rank-delta.up { color: var(--ok); } .rank-delta.down { color: var(--danger); }
+/* Пропуск */
+.pass-top { display: flex; align-items: center; gap: 16px; margin-bottom: 12px; flex-wrap: wrap; }
+.pass-top .lvl { font-family: var(--head); font-size: 40px; font-weight: 700; color: var(--gold); }
+.pass-top .bar { flex: 1; min-width: 200px; height: 8px; background: rgba(255,255,255,.1); } .pass-top .bar i { display: block; height: 100%; background: linear-gradient(90deg, var(--gold), #ff8a3d); }
+.pass-track { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 8px; touch-action: pan-x; }
+.pass-col { flex: none; width: 128px; display: flex; flex-direction: column; gap: 6px; }
+.pass-col .num { text-align: center; font-family: var(--head); font-weight: 700; font-size: 18px; padding: 4px; background: rgba(255,255,255,.05); }
+.pass-col.got .num { background: var(--gold); color: #1a1200; }
+.pcell { height: 120px; border: 1px solid var(--line); background: rgba(255,255,255,.03); padding: 8px; display: flex; flex-direction: column; align-items: center; justify-content: space-between; text-align: center; font-size: 12px; position: relative; }
+.pcell.prem { background: linear-gradient(180deg, rgba(255,194,61,.12), rgba(255,194,61,.02)); border-color: rgba(255,194,61,.35); }
+.pcell .ic { font-size: 30px; } .pcell .ic img { width: 100%; height: 44px; object-fit: contain; }
+.pcell button { width: 100%; padding: 5px; font-weight: 800; font-size: 11px; background: var(--accent); color: #04121c; }
+.pcell button:disabled { background: #2a3442; color: #7a8796; }
+.pcell .done { color: var(--ok); font-weight: 800; }
+.pcell.lock::after { content: '🔒'; position: absolute; top: 4px; right: 6px; font-size: 12px; }
