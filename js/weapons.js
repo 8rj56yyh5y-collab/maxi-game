@@ -1,256 +1,256 @@
-// Описание оружия и сборка 3D-моделей из примитивов.
+// 3D-модели оружия: GLB-модели (CC0) с PBR-материалами + процедурные ножи и гранаты.
 import * as THREE from 'three';
+import { clone as cloneSkinned } from 'three/addons/utils/SkeletonUtils.js';
+import { A, texSet } from './assets.js';
+import { WEAPONS, KNIVES } from './data.js';
 import { skinTexture } from './textures.js';
-import { mergeByMaterial } from './merge.js';
 
+export { WEAPONS };
 
-// spread — разброс в радианах. recoil — подброс прицела за выстрел.
-export const WEAPONS = {
-  ar: {
-    id: 'ar', name: 'AR-7 «Шторм»', short: 'AR-7', slot: 0, type: 'rifle',
-    damage: 32, headMul: 3.6, legMul: 0.8, rpm: 620, auto: true, mag: 30, reserve: 90, reload: 2.3,
-    spread: 0.003, moveSpread: 0.045, airSpread: 0.14, bloomPerShot: 0.0055, maxBloom: 0.045,
-    recoil: { up: 0.016, side: 0.006 }, range: 150, falloff: 0.92, zoom: 1.35, speed: 1.0, sound: 'rifle',
-  },
-  smg: {
-    id: 'smg', name: 'VX-9 «Оса»', short: 'VX-9', slot: 0, type: 'smg',
-    damage: 23, headMul: 3.2, legMul: 0.85, rpm: 880, auto: true, mag: 28, reserve: 112, reload: 2.0,
-    spread: 0.006, moveSpread: 0.02, airSpread: 0.08, bloomPerShot: 0.004, maxBloom: 0.04,
-    recoil: { up: 0.009, side: 0.007 }, range: 70, falloff: 0.8, zoom: 1.2, speed: 1.1, sound: 'smg',
-  },
-  sniper: {
-    id: 'sniper', name: 'LR-50 «Сокол»', short: 'LR-50', slot: 0, type: 'sniper',
-    damage: 115, headMul: 2.5, legMul: 0.75, rpm: 44, auto: false, mag: 5, reserve: 20, reload: 3.1,
-    spread: 0.0004, unscoped: 0.09, moveSpread: 0.1, airSpread: 0.25, bloomPerShot: 0, maxBloom: 0,
-    recoil: { up: 0.05, side: 0.01 }, range: 300, falloff: 1, zoom: 4.5, scope: true, speed: 0.88, sound: 'sniper',
-  },
-  shotgun: {
-    id: 'shotgun', name: 'SG-12 «Таран»', short: 'SG-12', slot: 0, type: 'shotgun',
-    damage: 17, pellets: 9, pelletSpread: 0.055, headMul: 2.0, legMul: 0.9, rpm: 72, auto: false, mag: 7, reserve: 28, reload: 2.7,
-    spread: 0.01, moveSpread: 0.01, airSpread: 0.04, bloomPerShot: 0, maxBloom: 0,
-    recoil: { up: 0.045, side: 0.012 }, range: 40, falloff: 0.55, zoom: 1.15, speed: 1.0, sound: 'shotgun',
-  },
-  pistol: {
-    id: 'pistol', name: 'P-12 «Гадюка»', short: 'P-12', slot: 1, type: 'pistol',
-    damage: 28, headMul: 3.5, legMul: 0.8, rpm: 380, auto: false, mag: 12, reserve: 48, reload: 1.6,
-    spread: 0.004, moveSpread: 0.025, airSpread: 0.1, bloomPerShot: 0.012, maxBloom: 0.04,
-    recoil: { up: 0.022, side: 0.006 }, range: 90, falloff: 0.82, zoom: 1.2, speed: 1.06, sound: 'pistol',
-  },
-  knife: {
-    id: 'knife', name: 'Нож «Клык»', short: 'Нож', slot: 2, type: 'knife', melee: true,
-    damage: 55, headMul: 1.6, legMul: 1, rpm: 120, auto: true, mag: 0, reserve: 0, reload: 0, range: 2.3,
-    spread: 0, moveSpread: 0, airSpread: 0, bloomPerShot: 0, maxBloom: 0, recoil: { up: 0, side: 0 },
-    speed: 1.15, sound: 'knife',
-  },
-};
-
-export const PRIMARIES = ['ar', 'smg', 'sniper', 'shotgun'];
-
-// Высота линии прицеливания (для режима прицела от первого лица)
-export const SIGHT = { ar: 0.15, smg: 0.106, sniper: 0.137, shotgun: 0.079, pistol: 0.083, knife: 0 };
-
+// ---------- Материалы ----------
 const M = {};
 function mats() {
-  if (M.gun) return M;
-  M.gun = new THREE.MeshStandardMaterial({ color: 0x2b2d31, metalness: 0.75, roughness: 0.38 });
-  M.dark = new THREE.MeshStandardMaterial({ color: 0x18191b, metalness: 0.6, roughness: 0.45 });
-  M.poly = new THREE.MeshStandardMaterial({ color: 0x1e2023, metalness: 0.05, roughness: 0.72 });
-  M.rubber = new THREE.MeshStandardMaterial({ color: 0x111111, metalness: 0, roughness: 0.95 });
-  M.wood = new THREE.MeshStandardMaterial({ color: 0x6a4224, metalness: 0, roughness: 0.6 });
-  M.steel = new THREE.MeshStandardMaterial({ color: 0x9aa0a6, metalness: 0.95, roughness: 0.22 });
-  M.glass = new THREE.MeshStandardMaterial({ color: 0x3a6a8a, metalness: 0.2, roughness: 0.1, transparent: true, opacity: 0.12, depthWrite: false, envMapIntensity: 0.2 });
-  M.dot = new THREE.MeshBasicMaterial({ color: 0xff2020 });
-  M.brass = new THREE.MeshStandardMaterial({ color: 0xc9a043, metalness: 0.9, roughness: 0.3 });
-  M.tube = new THREE.MeshStandardMaterial({ color: 0x1d1e20, metalness: 0.6, roughness: 0.4, side: THREE.DoubleSide });
+  if (M.ready) return M;
+  const metalTex = texSet('metal2');
+  const detail = (o) => new THREE.MeshStandardMaterial({ normalMap: metalTex.normalMap, normalScale: new THREE.Vector2(0.35, 0.35), ...o });
+  M.body = detail({ color: 0x2a2c30, metalness: 0.25, roughness: 0.55, envMapIntensity: 0.6 });
+  M.poly = new THREE.MeshStandardMaterial({ color: 0x1b1d20, metalness: 0.05, roughness: 0.7 });
+  M.steelDark = detail({ color: 0x35383d, metalness: 0.7, roughness: 0.38, envMapIntensity: 0.7 });
+  M.steel = detail({ color: 0x9aa0a6, metalness: 0.95, roughness: 0.22 });
+  const wood = texSet('wood2');
+  M.wood = new THREE.MeshStandardMaterial({ map: wood.map, normalMap: wood.normalMap, color: 0xb08060, metalness: 0, roughness: 0.55 });
+  M.brass = new THREE.MeshStandardMaterial({ color: 0xc9a043, metalness: 1, roughness: 0.3 });
+  M.red = new THREE.MeshStandardMaterial({ color: 0x8e2a1e, metalness: 0.05, roughness: 0.6 });
+  M.rubber = new THREE.MeshStandardMaterial({ color: 0x111214, roughness: 0.92 });
+  M.lens = new THREE.MeshStandardMaterial({ color: 0x06121c, metalness: 1, roughness: 0.02, emissive: 0x0a2236, emissiveIntensity: 0.6 });
+  M.blade = detail({ color: 0xb9bec4, metalness: 1, roughness: 0.18 });
+  M.ready = true;
   return M;
 }
 
-export function skinMaterial(skin, weaponId) {
-  if (!skin) {
-    const base = { ar: 0x3d3a33, smg: 0x2a2c2f, sniper: 0x4a4636, shotgun: 0x2e2f31, pistol: 0x28292c, knife: 0xb8bcc0 }[weaponId] || 0x333333;
-    return new THREE.MeshStandardMaterial({ color: base, metalness: weaponId === 'knife' ? 0.95 : 0.35, roughness: weaponId === 'knife' ? 0.25 : 0.55 });
-  }
-  return new THREE.MeshStandardMaterial({
-    map: skinTexture(skin), metalness: weaponId === 'knife' ? 0.7 : 0.3, roughness: 0.42,
-    emissive: skin.glow ? new THREE.Color(skin.glow) : 0x000000, emissiveIntensity: skin.glow ? 0.35 : 0,
-    emissiveMap: skin.glow ? skinTexture(skin) : null,
+// Сопоставление материалов модели (плоские цвета) с PBR
+function mapMaterial(name, skinMat) {
+  const m = mats();
+  if (/Black/.test(name)) return skinMat || m.body;
+  if (/Grey_Darker|Grey_Dark/.test(name)) return m.steelDark;
+  if (/Grey_Light|Grey_Lighter|White/.test(name)) return m.steel;
+  if (/Brown/.test(name)) return skinMat || m.wood;
+  if (/Brass|Yellow/.test(name)) return m.brass;
+  if (/Red/.test(name)) return skinMat || m.red;
+  return m.body;
+}
+
+const skinMatCache = new Map();
+export function skinMaterial(skin) {
+  if (!skin) return null;
+  if (skinMatCache.has(skin.id)) return skinMatCache.get(skin.id);
+  const t = skinTexture(skin);
+  const m = new THREE.MeshStandardMaterial({
+    map: t, metalness: 0.35, roughness: 0.42,
+    normalMap: texSet('metal2').normalMap, normalScale: new THREE.Vector2(0.25, 0.25),
+    emissive: skin.glow ? new THREE.Color(skin.glow) : 0x000000, emissiveMap: skin.glow ? t : null, emissiveIntensity: skin.glow ? 0.45 : 0,
   });
+  skinMatCache.set(skin.id, m);
+  return m;
 }
 
-// Профиль в координатах (u — вперёд, v — вверх), выдавленный по ширине
-function prof(parent, mat, pts, width, bevel = 0.003, x = 0) {
-  const shape = new THREE.Shape(pts.map(([u, v]) => new THREE.Vector2(u, v)));
-  const depth = Math.max(0.001, width - bevel * 2);
-  const geo = new THREE.ExtrudeGeometry(shape, { depth, bevelEnabled: bevel > 0, bevelThickness: bevel, bevelSize: bevel, bevelSegments: 2, curveSegments: 8 });
-  geo.translate(0, 0, -depth / 2);
-  geo.rotateY(Math.PI / 2);
-  const uv = geo.attributes.uv;
-  for (let i = 0; i < uv.count; i++) uv.setXY(i, uv.getX(i) * 3, uv.getY(i) * 3);
-  const m = new THREE.Mesh(geo, mat);
-  m.position.x = x;
-  parent.add(m);
-  return m;
-}
-// Цилиндр вдоль оси ствола
-function cyl(parent, mat, r, u0, u1, v, x = 0, r2 = r, seg = 14, open = false) {
-  const g = new THREE.CylinderGeometry(r2, r, Math.abs(u1 - u0), seg, 1, open);
-  g.rotateX(-Math.PI / 2);
-  const m = new THREE.Mesh(g, mat);
-  m.position.set(x, v, -(u0 + u1) / 2);
-  parent.add(m);
-  return m;
-}
-function bx(parent, mat, u0, u1, v0, v1, w, x = 0) {
-  const m = new THREE.Mesh(new THREE.BoxGeometry(w, v1 - v0, u1 - u0), mat);
-  m.position.set(x, (v0 + v1) / 2, -(u0 + u1) / 2);
-  parent.add(m);
-  return m;
-}
-function rail(g, u0, u1, v, w = 0.024) {
-  const { gun } = mats();
-  bx(g, gun, u0, u1, v, v + 0.012, w);
-  for (let u = u0 + 0.006; u < u1 - 0.004; u += 0.014) bx(g, gun, u, u + 0.007, v + 0.012, v + 0.018, w * 1.15);
-}
-function grip(g, mat, u = 0) {
-  prof(g, mat, [[-0.06 + u, 0.0], [-0.02 + u, 0.0], [-0.042 + u, -0.06], [-0.05 + u, -0.115], [-0.098 + u, -0.118], [-0.09 + u, -0.06]], 0.033, 0.004);
-  // насечки
-  for (let k = 0; k < 4; k++) bx(g, mats().rubber, -0.085 + u + k * 0.005, -0.08 + u + k * 0.005, -0.1 + k * 0.022, -0.095 + k * 0.022, 0.035);
-}
-function trigger(g, u = 0) {
-  const { gun, dark } = mats();
-  prof(g, gun, [[-0.02 + u, -0.003], [0.045 + u, -0.003], [0.045 + u, -0.04], [-0.02 + u, -0.04], [-0.02 + u, -0.035], [0.04 + u, -0.035], [0.04 + u, -0.008], [-0.02 + u, -0.008]], 0.01, 0.001);
-  prof(g, dark, [[0.008 + u, -0.004], [0.016 + u, -0.004], [0.012 + u, -0.028], [0.006 + u, -0.026]], 0.006, 0.001);
+// Боковая проекция UV (модели смотрят стволом в -Z)
+const uvDone = new WeakSet();
+function sideUV(geo) {
+  if (uvDone.has(geo)) return;
+  const p = geo.attributes.position, n = p.count;
+  const uv = new Float32Array(n * 2);
+  for (let i = 0; i < n; i++) { uv[i * 2] = -p.getZ(i) * 3.2; uv[i * 2 + 1] = p.getY(i) * 3.2 + p.getX(i) * 0.5; }
+  geo.setAttribute('uv', new THREE.BufferAttribute(uv, 2));
+  uvDone.add(geo);
 }
 
-export function buildWeaponModel(id, skin) {
-  const { gun, dark, poly, rubber, wood, steel, glass, dot, tube } = mats();
-  const s = skinMaterial(skin, id);
+// Метаданные модели (точки хвата, прицел, дуло)
+const META = {};
+function modelMeta(file) {
+  if (META[file]) return META[file];
+  const scene = A.gltf[file].scene;
+  scene.updateMatrixWorld(true);
+  const pos = (re) => { let v = null; scene.traverse(o => { if (!v && re.test(o.name)) v = o.getWorldPosition(new THREE.Vector3()); }); return v; };
+  const box = new THREE.Box3().setFromObject(scene);
+  const trig = pos(/^Trigger$/) || new THREE.Vector3(0, -0.02, 0.05);
+  const muzzle = pos(/^Attach_Muzzle$/) || new THREE.Vector3(0, 0.02, box.min.z);
+  const rail = pos(/^Attach_RailBottom$/) || new THREE.Vector3(0, -0.01, (box.min.z + trig.z) / 2);
+  const pump = pos(/^Pump$/);
+  const rear = pos(/^Rear_?Sights$/);
+  const scope = pos(/^Attach_Scope$/) || new THREE.Vector3(0, box.max.y - 0.02, 0);
+  const isPistol = /Pistol/.test(file);
+  const m = {
+    box, muzzle, scope,
+    gripR: trig.clone().add(new THREE.Vector3(0, isPistol ? -0.035 : -0.045, isPistol ? 0.035 : 0.042)),
+    gripL: isPistol ? trig.clone().add(new THREE.Vector3(-0.022, -0.05, 0.04)) : (pump || rail).clone().add(new THREE.Vector3(0, -0.012, 0)),
+    sightY: rear ? rear.y + 0.012 : scope.y + 0.014,
+    length: box.max.z - box.min.z,
+  };
+  META[file] = m;
+  return m;
+}
+
+// Процедурный оптический прицел
+function buildScope(parent, at, big) {
+  const m = mats();
   const g = new THREE.Group();
-  const muzzle = new THREE.Object3D();
-  switch (id) {
-    case 'ar': {
-      prof(g, s, [[-0.13, -0.005], [0.13, -0.005], [0.15, 0.02], [0.15, 0.056], [-0.13, 0.056]], 0.048);       // нижний ресивер
-      prof(g, s, [[-0.145, 0.056], [0.2, 0.056], [0.2, 0.1], [-0.12, 0.1], [-0.145, 0.088]], 0.052);          // верхний ресивер
-      prof(g, s, [[0.19, 0.03], [0.5, 0.036], [0.5, 0.098], [0.19, 0.1]], 0.058, 0.005);                       // цевьё
-      for (let u = 0.24; u < 0.47; u += 0.045) for (const sx of [-1, 1]) bx(g, dark, u, u + 0.028, 0.055, 0.075, 0.004, sx * 0.03);
-      rail(g, -0.12, 0.49, 0.1);
-      cyl(g, gun, 0.0115, 0.49, 0.67, 0.07);
-      bx(g, gun, 0.52, 0.55, 0.055, 0.085, 0.03);                                                             // газовый блок
-      cyl(g, dark, 0.017, 0.64, 0.71, 0.07, 0, 0.017, 8);                                                       // ДТК
-      prof(g, s, [[0.02, 0.0], [0.115, 0.0], [0.115, -0.032], [0.02, -0.032]], 0.044);                          // приёмник магазина
-      prof(g, poly, [[0.03, -0.02], [0.105, -0.02], [0.12, -0.09], [0.145, -0.19], [0.08, -0.205], [0.055, -0.1]], 0.03, 0.003); // магазин
-      for (let k = 0; k < 5; k++) bx(g, rubber, 0.06 + k * 0.012, 0.064 + k * 0.012, -0.05 - k * 0.025, -0.045 - k * 0.025, 0.032);
-      grip(g, poly);
-      trigger(g);
-      cyl(g, gun, 0.016, -0.32, -0.13, 0.065);                                                                  // буферная трубка
-      prof(g, poly, [[-0.2, 0.09], [-0.2, 0.03], [-0.33, -0.035], [-0.395, -0.045], [-0.4, 0.095], [-0.3, 0.1]], 0.042, 0.005); // приклад
-      bx(g, rubber, -0.41, -0.395, -0.045, 0.095, 0.044);
-      bx(g, dark, 0.0, 0.08, 0.062, 0.09, 0.003, 0.027);                                                        // окно экстракции
-      bx(g, gun, -0.15, -0.12, 0.085, 0.1, 0.03);                                                               // рукоять затвора
-      // коллиматор
-      bx(g, gun, -0.01, 0.07, 0.118, 0.13, 0.03);
-      cyl(g, tube, 0.022, 0.0, 0.075, 0.152, 0, 0.022, 20, true);
-      const lens = cyl(g, glass, 0.02, 0.06, 0.062, 0.152, 0, 0.02, 20);
-      lens.renderOrder = 2;
-      const d = new THREE.Mesh(new THREE.SphereGeometry(0.0012, 8, 6), dot); d.position.set(0, 0.15, -0.061); g.add(d);
-      muzzle.position.set(0, 0.07, -0.72);
+  const L = big ? 0.3 : 0.2, R = big ? 0.019 : 0.016;
+  const tube = new THREE.CylinderGeometry(R, R, L, 20); tube.rotateX(Math.PI / 2);
+  g.add(new THREE.Mesh(tube, m.body));
+  const bellF = new THREE.CylinderGeometry(R * 1.55, R, 0.07, 20); bellF.rotateX(-Math.PI / 2); const bf = new THREE.Mesh(bellF, m.body); bf.position.z = -L / 2 - 0.03; g.add(bf);
+  const bellR = new THREE.CylinderGeometry(R * 1.25, R, 0.05, 20); bellR.rotateX(Math.PI / 2); const br = new THREE.Mesh(bellR, m.body); br.position.z = L / 2 + 0.02; g.add(br);
+  const lensF = new THREE.Mesh(new THREE.CircleGeometry(R * 1.45, 20), m.lens); lensF.position.z = -L / 2 - 0.066; lensF.rotation.y = Math.PI; g.add(lensF);
+  const lensR = new THREE.Mesh(new THREE.CircleGeometry(R * 1.15, 20), m.lens); lensR.position.z = L / 2 + 0.046; g.add(lensR);
+  const turret = new THREE.CylinderGeometry(0.012, 0.012, 0.03, 12);
+  const t1 = new THREE.Mesh(turret, m.steelDark); t1.position.set(0, R + 0.012, 0); g.add(t1);
+  const t2 = new THREE.Mesh(turret, m.steelDark); t2.rotation.z = Math.PI / 2; t2.position.set(R + 0.012, 0, 0); g.add(t2);
+  for (const z of [-L * 0.28, L * 0.28]) {
+    const ring = new THREE.Mesh(new THREE.BoxGeometry(0.03, 0.034, 0.018), m.steelDark); ring.position.set(0, -R - 0.006, z); g.add(ring);
+  }
+  g.position.copy(at).add(new THREE.Vector3(0, R + 0.016, 0));
+  g.traverse(o => { if (o.isMesh) o.castShadow = true; });
+  parent.add(g);
+  return g.position.y;
+}
+
+// ---------- Ножи ----------
+function extrude(shape, depth, bevel, mat) {
+  const geo = new THREE.ExtrudeGeometry(shape, { depth, bevelEnabled: true, bevelThickness: bevel, bevelSize: bevel, bevelSegments: 2, curveSegments: 12 });
+  geo.translate(0, 0, -depth / 2);
+  geo.rotateY(Math.PI / 2); // x (вперёд) → -z
+  const p = geo.attributes.position, uv = new Float32Array(p.count * 2);
+  for (let i = 0; i < p.count; i++) { uv[i * 2] = -p.getZ(i) * 4; uv[i * 2 + 1] = p.getY(i) * 4; }
+  geo.setAttribute('uv', new THREE.BufferAttribute(uv, 2));
+  return new THREE.Mesh(geo, mat);
+}
+function shapeFrom(pts) { const s = new THREE.Shape(); pts.forEach(([x, y], i) => i ? s.lineTo(x, y) : s.moveTo(x, y)); return s; }
+
+// Рукоять от 0 назад (до +z)
+function handle(g, mat, len, w, h) {
+  const m = mats();
+  g.add(extrude(shapeFrom([[0, -h / 2], [-len, -h / 2 + 0.004], [-len - 0.01, 0], [-len, h / 2 - 0.003], [0, h / 2]]), w, 0.004, mat));
+  for (let i = 0; i < 5; i++) {
+    const r = new THREE.Mesh(new THREE.BoxGeometry(w + 0.006, h + 0.003, 0.005), m.rubber);
+    r.position.set(0, 0, 0.02 + i * (len - 0.03) / 5); g.add(r);
+  }
+  const pommel = new THREE.Mesh(new THREE.CylinderGeometry(h * 0.42, h * 0.5, 0.014, 14), m.steelDark);
+  pommel.rotation.x = Math.PI / 2; pommel.position.z = len + 0.008; g.add(pommel);
+}
+
+function buildKnife(type, skin) {
+  const m = mats();
+  const bladeMat = skinMaterial(skin) || m.blade;
+  const g = new THREE.Group();
+  switch (type) {
+    case 'bayonet': {
+      handle(g, m.poly, 0.12, 0.024, 0.03);
+      const guard = new THREE.Mesh(new THREE.BoxGeometry(0.02, 0.07, 0.012), m.steelDark); guard.position.z = -0.006; g.add(guard);
+      const ring = new THREE.Mesh(new THREE.TorusGeometry(0.012, 0.004, 8, 16), m.steelDark); ring.position.set(0, 0.03, -0.006); ring.rotation.y = Math.PI / 2; g.add(ring);
+      const b = new THREE.Shape(); b.moveTo(0, -0.014); b.lineTo(0.17, -0.012); b.quadraticCurveTo(0.21, -0.008, 0.225, 0.006); b.lineTo(0.15, 0.016); b.lineTo(0, 0.016);
+      const bm = extrude(b, 0.004, 0.0015, bladeMat); bm.position.z = -0.012; g.add(bm);
+      const fuller = new THREE.Mesh(new THREE.BoxGeometry(0.0064, 0.004, 0.11), m.steelDark); fuller.position.set(0, 0.004, -0.08); g.add(fuller);
       break;
     }
-    case 'smg': {
-      prof(g, s, [[-0.09, 0.0], [0.2, 0.0], [0.225, 0.02], [0.225, 0.088], [-0.09, 0.088]], 0.05, 0.005);
-      cyl(g, gun, 0.019, 0.22, 0.31, 0.058, 0, 0.019, 14);
-      for (let u = 0.235; u < 0.3; u += 0.02) cyl(g, dark, 0.02, u, u + 0.006, 0.058);
-      cyl(g, gun, 0.009, 0.3, 0.335, 0.058);
-      prof(g, poly, [[0.035, -0.005], [0.085, -0.005], [0.095, -0.17], [0.045, -0.17]], 0.028, 0.003);
-      bx(g, rubber, 0.04, 0.1, -0.175, -0.165, 0.032);
-      grip(g, poly, 0.01);
-      trigger(g, 0.01);
-      prof(g, poly, [[0.135, -0.002], [0.175, -0.002], [0.17, -0.085], [0.14, -0.085]], 0.03, 0.004);    // передняя рукоять
-      bx(g, gun, -0.32, -0.09, 0.068, 0.078, 0.012, 0.016); bx(g, gun, -0.32, -0.09, 0.068, 0.078, 0.012, -0.016);
-      bx(g, gun, -0.32, -0.09, 0.005, 0.015, 0.012, 0.016); bx(g, gun, -0.32, -0.09, 0.005, 0.015, 0.012, -0.016);
-      bx(g, rubber, -0.335, -0.315, -0.005, 0.09, 0.046);
-      rail(g, -0.07, 0.19, 0.088, 0.022);
-      // механический прицел
-      bx(g, gun, -0.07, -0.055, 0.1, 0.112, 0.006, 0.008); bx(g, gun, -0.07, -0.055, 0.1, 0.112, 0.006, -0.008);
-      bx(g, gun, 0.18, 0.19, 0.1, 0.108, 0.0035);
-      bx(g, dark, 0.0, 0.07, 0.05, 0.075, 0.003, 0.026);
-      muzzle.position.set(0, 0.058, -0.34);
+    case 'karambit': {
+      const h = new THREE.Shape(); h.moveTo(0, -0.013); h.quadraticCurveTo(-0.06, -0.022, -0.1, -0.004); h.lineTo(-0.1, 0.02); h.quadraticCurveTo(-0.06, 0.008, 0, 0.013);
+      g.add(extrude(h, 0.022, 0.004, m.poly));
+      const ring = new THREE.Mesh(new THREE.TorusGeometry(0.02, 0.006, 10, 24), m.steelDark); ring.position.set(0, 0.012, 0.118); ring.rotation.y = Math.PI / 2; g.add(ring);
+      const b = new THREE.Shape(); b.moveTo(0, -0.012); b.quadraticCurveTo(0.08, -0.02, 0.125, -0.065); b.quadraticCurveTo(0.09, -0.008, 0, 0.014);
+      g.add(extrude(b, 0.004, 0.0012, bladeMat));
       break;
     }
-    case 'sniper': {
-      prof(g, s, [[-0.12, 0.0], [0.42, 0.005], [0.42, 0.062], [-0.12, 0.068]], 0.058, 0.006);                           // шасси
-      prof(g, s, [[-0.12, 0.068], [-0.12, -0.0], [-0.24, -0.03], [-0.47, -0.075], [-0.5, -0.075], [-0.5, 0.085], [-0.3, 0.08], [-0.2, 0.07]], 0.05, 0.006);
-      bx(g, rubber, -0.515, -0.5, -0.075, 0.085, 0.052);
-      prof(g, poly, [[-0.33, 0.085], [-0.22, 0.073], [-0.22, 0.095], [-0.33, 0.1]], 0.03, 0.004);                       // щека
-      grip(g, poly, -0.02);
-      trigger(g, -0.02);
-      cyl(g, gun, 0.016, 0.4, 0.98, 0.04, 0, 0.012, 14);
-      bx(g, dark, 0.95, 1.02, 0.022, 0.058, 0.036);
-      for (const sx of [-1, 1]) bx(g, gun, 0.96, 1.01, 0.03, 0.05, 0.002, sx * 0.019);
-      prof(g, poly, [[0.04, 0.0], [0.11, 0.0], [0.11, -0.06], [0.04, -0.06]], 0.04, 0.003);
-      // затвор
-      cyl(g, steel, 0.012, -0.08, 0.06, 0.08, 0.012);
-      const bolt = new THREE.Mesh(new THREE.CylinderGeometry(0.005, 0.005, 0.06, 8), steel); bolt.rotation.z = Math.PI / 2; bolt.position.set(0.045, 0.075, 0.06); g.add(bolt);
-      const knob = new THREE.Mesh(new THREE.SphereGeometry(0.011, 10, 8), dark); knob.position.set(0.075, 0.072, 0.06); g.add(knob);
-      // оптика
-      cyl(g, gun, 0.02, -0.11, 0.2, 0.137);
-      cyl(g, gun, 0.021, 0.2, 0.28, 0.137, 0, 0.03);
-      cyl(g, gun, 0.021, -0.2, -0.11, 0.137, 0, 0.024);
-      cyl(g, glass, 0.028, 0.278, 0.282, 0.137); cyl(g, glass, 0.022, -0.202, -0.198, 0.137);
-      const t1 = new THREE.Mesh(new THREE.CylinderGeometry(0.013, 0.013, 0.025, 12), gun); t1.position.set(0, 0.168, -0.04); g.add(t1);
-      const t2 = new THREE.Mesh(new THREE.CylinderGeometry(0.013, 0.013, 0.025, 12), gun); t2.rotation.z = Math.PI / 2; t2.position.set(0.032, 0.137, -0.04); g.add(t2);
-      bx(g, dark, -0.07, -0.04, 0.068, 0.125, 0.026); bx(g, dark, 0.1, 0.13, 0.068, 0.125, 0.026);
-      // сошки
-      for (const sx of [-1, 1]) { const l = cyl(g, dark, 0.005, 0.32, 0.55, 0.005, sx * 0.012); l.rotation.z = 0; }
-      muzzle.position.set(0, 0.04, -1.02);
+    case 'butterfly': {
+      for (const sx of [-1, 1]) {
+        const half = extrude(shapeFrom([[0, -0.012], [-0.13, -0.012], [-0.135, 0], [-0.13, 0.012], [0, 0.012]]), 0.011, 0.002, m.steelDark);
+        half.position.x = sx * 0.008; g.add(half);
+      }
+      for (let i = 0; i < 6; i++) { const hole = new THREE.Mesh(new THREE.CylinderGeometry(0.0045, 0.0045, 0.03, 10), m.rubber); hole.rotation.z = Math.PI / 2; hole.position.set(0, 0, 0.02 + i * 0.018); g.add(hole); }
+      const b = new THREE.Shape(); b.moveTo(0, -0.011); b.lineTo(0.16, -0.009); b.quadraticCurveTo(0.2, -0.004, 0.205, 0.004); b.lineTo(0.13, 0.013); b.lineTo(0, 0.012);
+      g.add(extrude(b, 0.0035, 0.001, bladeMat));
       break;
     }
-    case 'shotgun': {
-      prof(g, s, [[-0.11, 0.0], [0.16, 0.0], [0.16, 0.076], [-0.09, 0.076], [-0.11, 0.06]], 0.054, 0.005);
-      cyl(g, gun, 0.0145, 0.15, 0.64, 0.057);
-      cyl(g, gun, 0.0135, 0.15, 0.56, 0.022);
-      bx(g, gun, 0.55, 0.57, 0.015, 0.065, 0.02);
-      const pump = cyl(g, s, 0.024, 0.26, 0.44, 0.022, 0, 0.024, 16);
-      for (let u = 0.275; u < 0.43; u += 0.018) cyl(g, rubber, 0.0255, u, u + 0.007, 0.022);
-      void pump;
-      grip(g, poly, -0.01);
-      trigger(g, -0.01);
-      prof(g, s, [[-0.11, 0.07], [-0.11, 0.0], [-0.24, -0.03], [-0.43, -0.065], [-0.45, -0.065], [-0.45, 0.075], [-0.3, 0.075]], 0.046, 0.006);
-      bx(g, rubber, -0.465, -0.45, -0.065, 0.075, 0.05);
-      const bead = new THREE.Mesh(new THREE.SphereGeometry(0.004, 8, 6), steel); bead.position.set(0, 0.075, -0.63); g.add(bead);
-      bx(g, dark, 0.0, 0.08, 0.035, 0.06, 0.003, 0.027);
-      bx(g, gun, -0.06, 0.15, 0.076, 0.082, 0.008);
-      muzzle.position.set(0, 0.057, -0.65);
+    case 'kukri': {
+      handle(g, m.wood, 0.12, 0.026, 0.032);
+      const guard = new THREE.Mesh(new THREE.BoxGeometry(0.03, 0.045, 0.008), m.brass); guard.position.z = -0.004; g.add(guard);
+      const b = new THREE.Shape(); b.moveTo(0, -0.014); b.quadraticCurveTo(0.12, -0.016, 0.2, -0.05); b.quadraticCurveTo(0.24, -0.062, 0.262, -0.04); b.quadraticCurveTo(0.2, 0.022, 0, 0.016);
+      const bm = extrude(b, 0.005, 0.0015, bladeMat); bm.position.z = -0.008; g.add(bm);
       break;
     }
-    case 'pistol': {
-      prof(g, s, [[-0.035, 0.04], [0.165, 0.04], [0.165, 0.074], [-0.028, 0.076], [-0.038, 0.066]], 0.028, 0.003);   // затвор
-      for (let k = 0; k < 6; k++) bx(g, dark, -0.03 + k * 0.007, -0.027 + k * 0.007, 0.045, 0.07, 0.03);
-      prof(g, poly, [[-0.025, 0.002], [0.15, 0.012], [0.15, 0.04], [-0.03, 0.04]], 0.026, 0.003);                     // рамка
-      prof(g, poly, [[-0.03, 0.01], [0.02, 0.01], [0.006, -0.1], [-0.046, -0.104], [-0.048, -0.03]], 0.03, 0.004);    // рукоять
-      for (let k = 0; k < 6; k++) bx(g, rubber, -0.04 + k * 0.004, -0.036 + k * 0.004, -0.09 + k * 0.016, -0.084 + k * 0.016, 0.032);
-      trigger(g, 0.015);
-      cyl(g, steel, 0.006, 0.16, 0.168, 0.058);
-      bx(g, dark, -0.028, -0.018, 0.076, 0.086, 0.004, 0.007); bx(g, dark, -0.028, -0.018, 0.076, 0.086, 0.004, -0.007);
-      bx(g, dark, 0.148, 0.156, 0.076, 0.085, 0.004);
-      bx(g, dark, 0.03, 0.07, 0.056, 0.072, 0.003, 0.0145);
-      muzzle.position.set(0, 0.058, -0.17);
+    case 'dagger': {
+      handle(g, m.poly, 0.1, 0.022, 0.028);
+      const guard = new THREE.Mesh(new THREE.BoxGeometry(0.018, 0.075, 0.01), m.steelDark); guard.position.z = -0.005; g.add(guard);
+      const b = new THREE.Shape(); b.moveTo(0, -0.018); b.lineTo(0.17, -0.002); b.lineTo(0.175, 0); b.lineTo(0.17, 0.002); b.lineTo(0, 0.018);
+      const bm = extrude(b, 0.005, 0.0018, bladeMat); bm.position.z = -0.01; g.add(bm);
       break;
     }
-    case 'knife': {
-      prof(g, poly, [[-0.12, -0.011], [-0.005, -0.014], [-0.005, 0.014], [-0.12, 0.012], [-0.13, 0.0]], 0.024, 0.004);
-      for (let k = 0; k < 5; k++) bx(g, rubber, -0.105 + k * 0.02, -0.095 + k * 0.02, -0.015, 0.015, 0.026);
-      prof(g, gun, [[-0.005, -0.026], [0.006, -0.026], [0.006, 0.024], [-0.005, 0.024]], 0.03, 0.002);
-      prof(g, s, [[0.006, -0.012], [0.17, -0.012], [0.235, 0.004], [0.245, 0.016], [0.2, 0.016], [0.17, 0.012], [0.006, 0.014]], 0.005, 0.0012);
-      bx(g, dark, 0.02, 0.15, 0.0, 0.004, 0.0062);
-      cyl(g, gun, 0.012, -0.14, -0.125, 0.0);
-      muzzle.position.set(0, 0, -0.25);
-      break;
+    default: { // боевой
+      handle(g, m.poly, 0.12, 0.026, 0.032);
+      const guard = new THREE.Mesh(new THREE.BoxGeometry(0.03, 0.06, 0.01), m.steelDark); guard.position.z = -0.005; g.add(guard);
+      const b = new THREE.Shape(); b.moveTo(0, -0.016); b.lineTo(0.15, -0.016); b.quadraticCurveTo(0.2, -0.012, 0.215, 0.004); b.lineTo(0.17, 0.008); b.quadraticCurveTo(0.12, 0.018, 0.08, 0.018); b.lineTo(0, 0.018);
+      const bm = extrude(b, 0.005, 0.0015, bladeMat); bm.position.z = -0.01; g.add(bm);
+      for (let i = 0; i < 6; i++) { const s = new THREE.Mesh(new THREE.BoxGeometry(0.0062, 0.006, 0.006), m.blade); s.position.set(0, 0.0195, -0.03 - i * 0.01); s.rotation.x = Math.PI / 4; g.add(s); }
     }
   }
-  mergeByMaterial(g);
-  g.traverse(o => { if (o.isMesh) { o.castShadow = true; } });
-  g.add(muzzle);
-  g.userData.muzzle = muzzle;
+  g.traverse(o => { if (o.isMesh) o.castShadow = true; });
+  return g;
+}
+
+// ---------- Гранаты ----------
+export function buildGrenade(type) {
+  const m = mats();
+  const g = new THREE.Group();
+  const col = type === 'he' ? 0x4b5a32 : type === 'smoke' ? 0x5a6270 : 0x2f3a46;
+  const bodyMat = new THREE.MeshStandardMaterial({ color: col, roughness: 0.55, metalness: 0.35, normalMap: texSet('metal2').normalMap });
+  const body = type === 'he' ? new THREE.Mesh(new THREE.SphereGeometry(0.033, 18, 14), bodyMat) : new THREE.Mesh(new THREE.CylinderGeometry(0.026, 0.026, 0.09, 18), bodyMat);
+  g.add(body);
+  const topY = type === 'he' ? 0.04 : 0.055;
+  const top = new THREE.Mesh(new THREE.CylinderGeometry(0.012, 0.014, 0.022, 12), m.steelDark); top.position.y = topY; g.add(top);
+  const lever = new THREE.Mesh(new THREE.BoxGeometry(0.008, 0.06, 0.012), m.steel); lever.position.set(0.02, topY - 0.02, 0); lever.rotation.z = -0.15; g.add(lever);
+  const ring = new THREE.Mesh(new THREE.TorusGeometry(0.01, 0.002, 6, 16), m.steel); ring.position.set(-0.015, topY + 0.008, 0); g.add(ring);
+  if (type !== 'he') { const band = new THREE.Mesh(new THREE.CylinderGeometry(0.0265, 0.0265, 0.012, 18), new THREE.MeshStandardMaterial({ color: type === 'smoke' ? 0xd9d9d9 : 0x2ec4ff, roughness: 0.5 })); band.position.y = 0.015; g.add(band); }
+  g.traverse(o => { if (o.isMesh) o.castShadow = true; });
+  return g;
+}
+
+// ---------- Сборка оружия ----------
+export function buildWeaponModel(id, skin) {
+  if (KNIVES[id]) {
+    const g = buildKnife(KNIVES[id].type, skin);
+    const mz = new THREE.Object3D(); mz.position.set(0, 0, -0.2); g.add(mz);
+    Object.assign(g.userData, { muzzle: mz, gripR: new THREE.Vector3(0, 0, 0.055), gripL: null, sightY: 0, knife: true });
+    return g;
+  }
+  if (['he', 'flash', 'smoke'].includes(id)) {
+    const g = buildGrenade(id);
+    Object.assign(g.userData, { muzzle: g, gripR: new THREE.Vector3(0, -0.01, 0.0), gripL: null, sightY: 0, grenade: true });
+    return g;
+  }
+  const w = WEAPONS[id];
+  const src = w && A.gltf[w.model];
+  const g = new THREE.Group();
+  if (!src) return g;
+  const meta = modelMeta(w.model);
+  const model = cloneSkinned(src.scene);
+  const sm = skinMaterial(skin);
+  let mag = null, bolt = null;
+  model.traverse(o => {
+    if (o.isMesh) {
+      sideUV(o.geometry);
+      o.material = Array.isArray(o.material) ? o.material.map(mm => mapMaterial(mm.name, sm)) : mapMaterial(o.material.name, sm);
+      o.castShadow = true; o.receiveShadow = true;
+      o.frustumCulled = false;
+    }
+    if (o.name === 'Magazine') mag = o;
+    if (o.name === 'Bolt') bolt = o;
+  });
+  g.add(model);
+  let sightY = meta.sightY;
+  if (w.scope >= 3) sightY = buildScope(g, meta.scope, w.id === 'awr');
+  const muzzle = new THREE.Object3D(); muzzle.position.copy(meta.muzzle); g.add(muzzle);
+  Object.assign(g.userData, {
+    muzzle, gripR: meta.gripR.clone(), gripL: meta.gripL.clone(), sightY, mag, bolt,
+    magRest: mag ? mag.position.clone() : null, boltRest: bolt ? bolt.position.clone() : null, length: meta.length, box: meta.box,
+  });
   return g;
 }

@@ -3,6 +3,24 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { surface, contactShadowTexture, leafTexture } from './textures.js';
+import { texSet } from './assets.js';
+
+// Реальные PBR-текстуры (ambientCG, CC0): ключ → набор, размер тайла (м), тонировка
+const REAL = {
+  plaster: { set: 'plaster', tile: 3.5, color: 0xf0d8b0 },
+  plasterWhite: { set: 'plaster2', tile: 3.5, color: 0xf2ece0 },
+  plasterTerra: { set: 'plaster3', tile: 3.5, color: 0xe0a676 },
+  brick: { set: 'bricks3', tile: 2.2, color: 0xffffff },
+  stone: { set: 'bricks2', tile: 2.4, color: 0xf2e2c8 },
+  concrete: { set: 'concrete', tile: 3, color: 0xe8e2d6 },
+  concreteLight: { set: 'concrete2', tile: 4, color: 0xffffff, ry: 0.5 },
+  wood: { set: 'wood', tile: 1.2, color: 0xffffff },
+  planks: { set: 'wood3', tile: 1.5, color: 0xb08868, ry: 0.5 },
+  metal: { set: 'metal3', tile: 2.5, color: 0xffffff, metal: 0.6 },
+  sand: { set: 'ground', tile: 5, color: 0xffffff },
+  asphalt: { set: 'asphalt2', tile: 5, color: 0xd0d0d0 },
+  tiles: { set: 'concrete3', tile: 3, color: 0xffffff },
+};
 
 function perimeter(x1, z1, x2, z2, h = 7) {
   return [
@@ -41,7 +59,8 @@ export const MAPS = {
   oasis: {
     id: 'oasis', name: 'Оазис', desc: 'Пустынный городок, три линии', ground: 'sand',
     sky: { elevation: 48, azimuth: 135, turbidity: 3.5, rayleigh: 1.1, mie: 0.004, exposure: 0.55 },
-    sun: 0xfff0d8, sunI: 3.2, hemi: [0xbcd4f0, 0x8a7258, 0.6], fog: [0xcdd5d8, 0.0065],
+    sun: 0xfff0d8, sunI: 3.0, hemi: [0xbcd4f0, 0x8a7258, 0.35], fog: [0xcdd5d8, 0.0055], hdri: 'quarry_01_1k', envI: 0.7,
+    sites: { A: [-18, 21, 5], B: [-18, -21, 5] },
     bounds: [-41, -31, 41, 31],
     boxes: [
       ...perimeter(-41, -31, 41, 31, 7),
@@ -62,7 +81,8 @@ export const MAPS = {
   port: {
     id: 'port', name: 'Порт', desc: 'Контейнерный терминал на закате', ground: 'asphalt',
     sky: { elevation: 13, azimuth: 250, turbidity: 7, rayleigh: 2.2, mie: 0.005, exposure: 0.5 },
-    sun: 0xffc896, sunI: 3.2, hemi: [0xa8b8d8, 0x5a4a3c, 1.0], fog: [0xc2a898, 0.0075],
+    sun: 0xffc896, sunI: 3.0, hemi: [0xa8b8d8, 0x5a4a3c, 0.5], fog: [0xc2a898, 0.0065], hdri: 'venice_sunset_1k', envI: 0.8,
+    sites: { A: [-21, -17, 4.5], B: [15, -18, 4.5] },
     bounds: [-36, -36, 36, 36],
     boxes: [
       ...perimeter(-36, -36, 36, 36, 5),
@@ -130,6 +150,12 @@ export function mapMaterial(key) {
     case 'water': m = std({ color: 0x2a4d5e, metalness: 0.6, roughness: 0.08 }); break;
     case 'mountain': m = std({ color: 0xb08d63, roughness: 1, flatShading: true }); break;
     default: {
+      if (REAL[key]) {
+        const r = REAL[key], t = texSet(r.set);
+        m = std({ map: t.map, normalMap: t.normalMap, roughnessMap: t.roughnessMap, color: r.color, roughness: 1, metalness: r.metal || 0 });
+        if (key !== 'sand' && key !== 'asphalt' && key !== 'tiles') patchGroundAO(m);
+        break;
+      }
       const s = surface(key);
       m = std({ map: s.map, normalMap: s.normalMap, roughness: s.roughness, metalness: s.metalness });
       m.normalScale.set(1, 1);
@@ -184,6 +210,7 @@ class Builder {
   }
 }
 function surfaceTile(mat) {
+  if (REAL[mat]) return REAL[mat].tile;
   if (['win', 'darkHole', 'steel', 'black', 'yellow', 'trunk', 'leaf', 'glow', 'carPaint', 'carPaint2', 'rubber', 'water', 'mountain'].includes(mat)) return 1;
   return surface(mat).tile;
 }
@@ -213,7 +240,7 @@ function house(B, b, R, exposed) {
   const mat = kind.split(':')[1] || 'plaster';
   B.box(x1, y0, z1, x2, y0 + h, z2, mat, true);
   // цоколь
-  B.box(x1 - 0.06, y0, z1 - 0.06, x2 + 0.06, y0 + 0.45, z2 + 0.06, 'concrete');
+  B.box(x1 - 0.06, y0, z1 - 0.06, x2 + 0.06, y0 + 0.6, z2 + 0.06, 'stone');
   // карниз и парапет
   const trim = mat === 'brick' ? 'concrete' : 'plasterWhite';
   B.box(x1 - 0.14, y0 + h - 0.3, z1 - 0.14, x2 + 0.14, y0 + h - 0.05, z2 + 0.14, trim);
@@ -295,7 +322,7 @@ function borderWall(B, b, R) {
   const [x1, z1, x2, z2, h] = b;
   B.box(x1, 0, z1, x2, h, z2, 'plaster', true);
   B.box(x1 - 0.1, h - 0.25, z1 - 0.1, x2 + 0.1, h, z2 + 0.1, 'plasterWhite');
-  B.box(x1 - 0.06, 0, z1 - 0.06, x2 + 0.06, 0.5, z2 + 0.06, 'concrete');
+  B.box(x1 - 0.06, 0, z1 - 0.06, x2 + 0.06, 0.7, z2 + 0.06, 'stone');
   // пилястры
   const along = x2 - x1 > z2 - z1;
   const L = along ? x2 - x1 : z2 - z1;
@@ -533,6 +560,19 @@ function crane(B, x, z) {
   B.box(x - 2, H + 2, z - 2, x + 2, H + 5, z + 3, 'container_w');
 }
 
+function siteMarker(name, x, z, r) {
+  const c = document.createElement('canvas'); c.width = c.height = 256;
+  const ctx = c.getContext('2d');
+  ctx.strokeStyle = 'rgba(255,200,40,0.75)'; ctx.lineWidth = 10; ctx.setLineDash([26, 16]);
+  ctx.beginPath(); ctx.arc(128, 128, 118, 0, Math.PI * 2); ctx.stroke();
+  ctx.fillStyle = 'rgba(255,200,40,0.7)'; ctx.font = 'bold 150px sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.fillText(name, 128, 136);
+  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace;
+  const m = new THREE.Mesh(new THREE.PlaneGeometry(r * 2, r * 2), new THREE.MeshStandardMaterial({ map: t, transparent: true, depthWrite: false, roughness: 0.9, polygonOffset: true, polygonOffsetFactor: -4 }));
+  m.rotation.x = -Math.PI / 2; m.position.set(x, 0.02, z); m.receiveShadow = true;
+  return m;
+}
+
 // ---------- сборка ----------
 export function buildMap(scene, id, quality) {
   const def = MAPS[id];
@@ -574,26 +614,17 @@ export function buildMap(scene, id, quality) {
   B.build(group, quality);
 
   // Пол
-  const [bx1, bz1, bx2, bz2] = def.bounds;
   const fw = 600, fd = 600;
-  const gs = surface(def.ground);
-  const gmat = mapMaterial(def.ground).clone();
-  gmat.map = gs.map.clone(); gmat.normalMap = gs.normalMap.clone();
-  gmat.map.repeat.set(fw / gs.tile, fd / gs.tile); gmat.normalMap.repeat.copy(gmat.map.repeat);
-  gmat.map.needsUpdate = gmat.normalMap.needsUpdate = true;
-  const floor = new THREE.Mesh(new THREE.PlaneGeometry(fw, fd), gmat);
+  const plane = (w, d, tile) => { const g = new THREE.PlaneGeometry(w, d); const uv = g.attributes.uv; for (let k = 0; k < uv.count; k++) uv.setXY(k, uv.getX(k) * w / tile, uv.getY(k) * d / tile); return g; };
+  const floor = new THREE.Mesh(plane(fw, fd, surfaceTile(def.ground)), mapMaterial(def.ground));
   floor.rotation.x = -Math.PI / 2;
   floor.receiveShadow = quality !== 'low';
   group.add(floor);
-  // дорожки из плитки
+  // дорожки
   for (const [px1, pz1, px2, pz2] of def.paths) {
     const tm = mapMaterial('tiles').clone();
-    const s = surface('tiles');
-    tm.map = s.map.clone(); tm.normalMap = s.normalMap.clone();
-    tm.map.repeat.set((px2 - px1) / s.tile, (pz2 - pz1) / s.tile); tm.normalMap.repeat.copy(tm.map.repeat);
-    tm.map.needsUpdate = tm.normalMap.needsUpdate = true;
     tm.polygonOffset = true; tm.polygonOffsetFactor = -1;
-    const p = new THREE.Mesh(new THREE.PlaneGeometry(px2 - px1, pz2 - pz1), tm);
+    const p = new THREE.Mesh(plane(px2 - px1, pz2 - pz1, surfaceTile('tiles')), tm);
     p.rotation.x = -Math.PI / 2; p.position.set((px1 + px2) / 2, 0.005, (pz1 + pz2) / 2);
     p.receiveShadow = quality !== 'low';
     group.add(p);
@@ -605,6 +636,8 @@ export function buildMap(scene, id, quality) {
       const p = new THREE.Mesh(new THREE.PlaneGeometry(w, d), lm); p.rotation.x = -Math.PI / 2; p.position.set(x, 0.01, z); p.receiveShadow = true; group.add(p);
     }
   }
+  // Точки закладки бомбы
+  if (def.sites) for (const [name, [sx, sz, sr]] of Object.entries(def.sites)) group.add(siteMarker(name, sx, sz, sr));
   // Мягкие контактные тени у основания объектов
   const aoMat = new THREE.MeshBasicMaterial({ map: contactShadowTexture(), transparent: true, depthWrite: false, opacity: 0.55, polygonOffset: true, polygonOffsetFactor: -3 });
   for (const c of B.colliders) {

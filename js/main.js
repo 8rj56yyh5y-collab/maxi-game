@@ -1,36 +1,37 @@
-// Точка входа: лобби, арсенал, кейсы, настройки, запуск матча, игровой цикл.
+// Точка входа: загрузка, лобби, экраны меню, закупка, настройки, матч, игровой цикл.
 import * as THREE from 'three';
-import { Sky } from 'three/addons/objects/Sky.js';
-import { settings, saveSettings, getLayout, DEFAULT_LAYOUT, BUTTON_LABELS, isTouchMode, hadSavedSettings } from './settings.js';
+import { settings, saveSettings, getLayout, DEFAULT_LAYOUT, BUTTON_LABELS, isTouchMode, hadSavedSettings, applyPreset, resetSettings } from './settings.js';
 import { Input, BTN_ICONS } from './input.js';
 import { HUD } from './hud.js';
 import { Game } from './game.js';
 import { MAPS, buildMap } from './maps.js';
-import { WEAPONS, PRIMARIES, buildWeaponModel } from './weapons.js';
+import { WEAPONS, KNIVES, GRENADES, CATS, CAT_ORDER, MODES, MAP_INFO, RARITY, RARITY_ORDER, CASES, STORE, levelInfo, itemName } from './data.js';
 import { DIFFICULTY } from './bots.js';
-import { profile, saveProfile, SKINS, SKIN_WEAPONS, RARITY, CASES, equip, equippedSkin, openCase, randomFiller } from './skins.js';
-import { skinPreviewURL, surface } from './textures.js';
+import { profile, saveProfile, SKINS, equip, equippedSkin, openCase, buyCase, casePrice, caseContents, sellSkin, ownedKnives, buyStoreItem, dailyAvailable, claimDaily, weaponAvailableFor } from './skins.js';
+import { skinPreviewURL } from './textures.js';
 import { CharacterModel } from './character.js';
+import { buildWeaponModel } from './weapons.js';
 import { setupAtmosphere } from './render.js';
 import { buildWeaponIcons, iconImg } from './icons.js';
+import { loadCore, loadHDRI, texSet, texturesReady, A } from './assets.js';
 import { sound } from './audio.js';
 
 const $ = (id) => document.getElementById(id);
 const canvas = $('game');
 const nextFrame = () => new Promise(r => requestAnimationFrame(() => r()));
+const esc = (s) => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 
-if (!hadSavedSettings && isTouchMode()) settings.quality = 'low';
+if (!hadSavedSettings && isTouchMode()) applyPreset('low');
 
 // ---------- Рендер ----------
-const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance', stencil: false });
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: settings.antialias !== false, powerPreference: 'high-performance', stencil: false });
 renderer.outputColorSpace = THREE.SRGBColorSpace;
 renderer.autoClear = false;
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
 function applyPixelRatio() {
-  const q = settings.quality === 'low' ? 0.75 : settings.quality === 'medium' ? 1 : 1.15;
-  renderer.setPixelRatio(Math.min(2, window.devicePixelRatio || 1) * settings.renderScale * q * (isTouchMode() ? 0.85 : 1));
+  renderer.setPixelRatio(Math.min(2, window.devicePixelRatio || 1) * settings.renderScale * (isTouchMode() ? 0.85 : 1));
 }
 applyPixelRatio();
 renderer.setSize(innerWidth, innerHeight, false);
@@ -39,102 +40,100 @@ const input = new Input(canvas);
 const hud = new HUD();
 let game = null;
 
-// ---------- Сцена лобби ----------
-const lobby = { scene: new THREE.Scene(), camera: new THREE.PerspectiveCamera(32, innerWidth / innerHeight, 0.05, 100), t: 0, mode: 'char' };
-function buildLobby() {
+function toast(text) {
+  const t = $('toast'); t.textContent = text; t.className = 'show';
+  clearTimeout(toast._t); toast._t = setTimeout(() => t.className = '', 2200);
+}
+
+// ---------- Лобби ----------
+const lobby = { scene: new THREE.Scene(), camera: new THREE.PerspectiveCamera(30, innerWidth / innerHeight, 0.05, 100), t: 0, mode: 'char' };
+async function buildLobby() {
   const sc = lobby.scene;
-  sc.background = new THREE.Color(0x0a0d11);
-  sc.fog = new THREE.Fog(0x0a0d11, 6, 16);
-  // отражения от «неба»
+  sc.background = new THREE.Color(0x0a1119);
+  sc.fog = new THREE.Fog(0x0a1119, 7, 18);
   const pmrem = new THREE.PMREMGenerator(renderer);
-  const envScene = new THREE.Scene();
-  const sky = new Sky(); sky.scale.setScalar(1000);
-  const u = sky.material.uniforms; u.turbidity.value = 6; u.rayleigh.value = 2; u.sunPosition.value.set(0.3, 0.2, -1);
-  envScene.add(sky);
-  sc.environment = pmrem.fromScene(envScene, 0.04).texture;
+  sc.environment = pmrem.fromEquirectangular(await loadHDRI('quarry_01_1k')).texture;
   sc.environmentIntensity = 0.35;
   pmrem.dispose();
-  sc.add(new THREE.HemisphereLight(0x7f9bc4, 0x20160e, 0.5));
-  const key = new THREE.SpotLight(0xffe2c0, 60, 14, 0.5, 0.6, 1.6);
-  key.position.set(2.2, 4.2, 3.2); key.target.position.set(0, 1, 0);
+  sc.add(new THREE.HemisphereLight(0x7f9bc4, 0x20160e, 0.4));
+  const key = new THREE.SpotLight(0xffe7cc, 70, 16, 0.5, 0.6, 1.5);
+  key.position.set(2.2, 4.4, 3.4); key.target.position.set(0, 1, 0);
   key.castShadow = true; key.shadow.mapSize.set(1024, 1024); key.shadow.bias = -0.0005;
   sc.add(key, key.target);
-  const rim = new THREE.DirectionalLight(0xff7a18, 3.2); rim.position.set(-3, 2.5, -3); sc.add(rim);
-  const rim2 = new THREE.DirectionalLight(0x5aa9ff, 1.6); rim2.position.set(3, 1.5, -2.5); sc.add(rim2);
-  // пол
-  const floor = new THREE.Mesh(new THREE.CircleGeometry(9, 64), new THREE.MeshStandardMaterial({ color: 0x14181d, roughness: 0.32, metalness: 0.4 }));
+  const rim = new THREE.DirectionalLight(0x29b6f6, 3.5); rim.position.set(-3, 2.5, -3); sc.add(rim);
+  const rim2 = new THREE.DirectionalLight(0xffa860, 1.6); rim2.position.set(3, 1.5, -2.5); sc.add(rim2);
+  const fl = texSet('concrete');
+  const floorGeo = new THREE.CircleGeometry(10, 64);
+  const uv = floorGeo.attributes.uv; for (let i = 0; i < uv.count; i++) uv.setXY(i, uv.getX(i) * 6, uv.getY(i) * 6);
+  const floor = new THREE.Mesh(floorGeo, new THREE.MeshStandardMaterial({ map: fl.map, normalMap: fl.normalMap, roughnessMap: fl.roughnessMap, color: 0x6a7480, metalness: 0.1 }));
   floor.rotation.x = -Math.PI / 2; floor.receiveShadow = true; sc.add(floor);
-  const ring = new THREE.Mesh(new THREE.RingGeometry(0.85, 0.9, 64), new THREE.MeshBasicMaterial({ color: 0xff7a18 }));
-  ring.rotation.x = -Math.PI / 2; ring.position.y = 0.003; sc.add(ring);
-  const ring2 = new THREE.Mesh(new THREE.RingGeometry(1.15, 1.17, 64), new THREE.MeshBasicMaterial({ color: 0x553015 }));
-  ring2.rotation.x = -Math.PI / 2; ring2.position.y = 0.003; sc.add(ring2);
-  // декорации: контейнеры и ящики в полутьме
-  const box = (w, h, d, x, y, z, name, ry = 0) => {
-    const s = surface(name);
-    const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), new THREE.MeshStandardMaterial({ map: s.map, normalMap: s.normalMap, roughness: s.roughness, metalness: s.metalness }));
+  const ring = new THREE.Mesh(new THREE.RingGeometry(0.85, 0.89, 64), new THREE.MeshBasicMaterial({ color: 0x29b6f6 }));
+  ring.rotation.x = -Math.PI / 2; ring.position.y = 0.004; sc.add(ring);
+  const box = (w, h, d, x, y, z, set, ry = 0, color = 0xffffff) => {
+    const s = texSet(set);
+    const g = new THREE.BoxGeometry(w, h, d);
+    const m = new THREE.Mesh(g, new THREE.MeshStandardMaterial({ map: s.map, normalMap: s.normalMap, roughnessMap: s.roughnessMap, color }));
     m.position.set(x, y, z); m.rotation.y = ry; m.castShadow = m.receiveShadow = true; sc.add(m);
   };
-  box(6, 2.6, 2.4, -1.5, 1.3, -3.6, 'container_b', 0.1);
-  box(6, 2.6, 2.4, -1.2, 3.9, -3.9, 'container_o', 0.05);
-  box(2.4, 2.6, 6, 4.2, 1.3, -2.6, 'container_r', -0.3);
-  box(1, 1, 1, 1.6, 0.5, -1.3, 'wood', 0.4); box(1, 1, 1, 2.2, 0.5, -0.4, 'wood', -0.2); box(0.8, 0.8, 0.8, 1.9, 1.4, -0.9, 'wood', 0.7);
-  box(1, 1, 1, -2.4, 0.5, -1.2, 'wood', 0.2);
-  // боец
-  lobby.char = new CharacterModel('A');
-  lobby.char.root.traverse(o => { if (o.isMesh) o.castShadow = true; });
-  sc.add(lobby.char.root);
-  lobby.actor = { pos: new THREE.Vector3(0, 0, 0), vel: new THREE.Vector3(), yaw: Math.PI - 0.45, pitch: -0.12, alive: true, crouchT: 0 };
-  // витрина оружия
-  lobby.weaponHolder = new THREE.Group(); lobby.weaponHolder.position.set(0, 1.1, 0); sc.add(lobby.weaponHolder);
-  // частицы пыли в свете
+  box(7, 3.2, 0.5, -0.5, 1.6, -3.4, 'concrete', 0.05, 0x8c96a0);
+  box(2.6, 2.6, 6, 4.4, 1.3, -2.4, 'metal', -0.3, 0x6b8299);
+  box(1, 1, 1, 1.7, 0.5, -1.4, 'wood', 0.4); box(1, 1, 1, 2.3, 0.5, -0.4, 'wood', -0.2); box(0.8, 0.8, 0.8, 2.0, 1.4, -0.9, 'wood', 0.7);
+  box(1, 1, 1, -2.5, 0.5, -1.3, 'wood', 0.2);
+  lobby.weaponHolder = new THREE.Group(); lobby.weaponHolder.position.set(0, 1.15, 0); sc.add(lobby.weaponHolder);
   const pg = new THREE.BufferGeometry(); const pts = new Float32Array(300 * 3);
   for (let i = 0; i < 300; i++) { pts[i * 3] = (Math.random() - 0.5) * 6; pts[i * 3 + 1] = Math.random() * 3.5; pts[i * 3 + 2] = (Math.random() - 0.5) * 5; }
   pg.setAttribute('position', new THREE.BufferAttribute(pts, 3));
-  lobby.dust = new THREE.Points(pg, new THREE.PointsMaterial({ color: 0xffd9b0, size: 0.012, transparent: true, opacity: 0.5 }));
+  lobby.dust = new THREE.Points(pg, new THREE.PointsMaterial({ color: 0xbfe6ff, size: 0.012, transparent: true, opacity: 0.45 }));
   sc.add(lobby.dust);
+  setLobbyTeam('A');
+}
+
+function setLobbyTeam(team) {
+  if (lobby.team === team && lobby.char) return;
+  lobby.team = team;
+  if (lobby.char) lobby.scene.remove(lobby.char.root);
+  lobby.char = new CharacterModel(team);
+  lobby.scene.add(lobby.char.root);
+  lobby.actor = { pos: new THREE.Vector3(0, 0, 0), vel: new THREE.Vector3(), yaw: Math.PI - 0.5, pitch: -0.08, alive: true, crouchT: 0 };
+  lobby.charWeapon = null;
+  setLobbyCharacter();
 }
 
 function setLobbyCharacter() {
-  const w = primaryOf();
+  const lo = profile.loadout[lobby.team] || profile.loadout.A;
+  const w = lo.primary;
   lobby.char.setWeapon(w, equippedSkin(w));
 }
 
-function setShowcase(weaponId, skin) {
+function setShowcase(id, skin) {
   if (lobby.weapon) lobby.weaponHolder.remove(lobby.weapon);
-  const m = buildWeaponModel(weaponId, skin);
-  m.traverse(o => { if (o.isMesh) o.castShadow = true; });
+  const m = buildWeaponModel(id, skin);
   const b = new THREE.Box3().setFromObject(m);
   const size = b.getSize(new THREE.Vector3()), c = b.getCenter(new THREE.Vector3());
-  const s = 1.35 / Math.max(size.x, size.y, size.z);
+  const s = (KNIVES[id] ? 0.9 : 1.35) / Math.max(size.x, size.y, size.z);
   m.scale.setScalar(s); m.position.copy(c).multiplyScalar(-s);
   const wrap = new THREE.Group(); wrap.add(m);
   lobby.weapon = wrap; lobby.weaponHolder.add(wrap);
 }
 
-function layoutLobby() {
-  const aspect = innerWidth / innerHeight;
-  lobby.camera.aspect = aspect; lobby.camera.updateProjectionMatrix();
-}
-
 function setLobbyMode(mode) {
   lobby.mode = mode;
-  lobby.char.root.visible = mode === 'char';
-  lobby.weaponHolder.visible = mode === 'weapon';
+  if (lobby.char) lobby.char.root.visible = mode === 'char';
+  if (lobby.weaponHolder) lobby.weaponHolder.visible = mode === 'weapon';
 }
 
 function renderLobby(dt) {
   lobby.t += dt;
   const aspect = innerWidth / innerHeight;
-  if (lobby.mode === 'char') {
+  lobby.camera.aspect = aspect; lobby.camera.updateProjectionMatrix();
+  if (lobby.mode === 'char' && lobby.char) {
     lobby.char.update(dt, lobby.actor);
-    const off = aspect > 1.3 ? -0.55 : 0;
-    lobby.camera.position.set(0.15 + off + Math.sin(lobby.t * 0.15) * 0.08, 1.35, 4.6);
-    lobby.camera.lookAt(off, 1.0, 0);
+    lobby.camera.position.set(0.1 + Math.sin(lobby.t * 0.15) * 0.08, 1.45, 5.6);
+    lobby.camera.lookAt(0, 1.0, 0);
   } else {
-    if (lobby.weapon) { lobby.weapon.rotation.y = Math.sin(lobby.t * 0.45) * 0.7 - Math.PI / 2 + 0.3; lobby.weapon.position.y = Math.sin(lobby.t * 1.2) * 0.02; }
-    const off = aspect > 1.3 ? -0.75 : 0;
-    lobby.camera.position.set(off, 1.25, 3.3);
-    lobby.camera.lookAt(off, 1.05, 0);
+    if (lobby.weapon) { lobby.weapon.rotation.y = Math.sin(lobby.t * 0.45) * 0.6 - Math.PI / 2 + 0.25; lobby.weapon.position.y = Math.sin(lobby.t * 1.2) * 0.02; }
+    lobby.camera.position.set(0, 1.25, 3.4);
+    lobby.camera.lookAt(0, 1.1, 0);
   }
   lobby.dust.rotation.y += dt * 0.02;
   renderer.toneMappingExposure = 1.0;
@@ -142,13 +141,14 @@ function renderLobby(dt) {
   renderer.render(lobby.scene, lobby.camera);
 }
 
-// ---------- Превью карт (рендер настоящей карты) ----------
+// ---------- Превью карт ----------
 const mapThumbs = {};
 const THUMB_CAM = { oasis: [[-38, 10, 16], [0, 0, -4]], port: [[-30, 13, -35], [2, 0, 4]] };
-function renderMapThumb(id) {
+async function renderMapThumb(id) {
   const sc = new THREE.Scene();
   buildMap(sc, id, 'medium');
-  const at = setupAtmosphere(renderer, sc, MAPS[id], 'medium');
+  const at = setupAtmosphere(renderer, sc, MAPS[id], 'medium', await loadHDRI(MAPS[id].hdri));
+  await texturesReady();
   const cam = new THREE.PerspectiveCamera(60, canvas.width / canvas.height, 0.1, 1000);
   const [p, t] = THUMB_CAM[id];
   cam.position.set(...p); cam.lookAt(...t);
@@ -158,8 +158,8 @@ function renderMapThumb(id) {
   renderer.render(sc, cam);
   const out = document.createElement('canvas'); out.width = 480; out.height = 240;
   const ctx = out.getContext('2d');
-  const sw = canvas.width, sh = canvas.height, ta = 2;
-  let cw = sw, ch = sw / ta; if (ch > sh) { ch = sh; cw = sh * ta; }
+  const sw = canvas.width, sh = canvas.height;
+  let cw = sw, ch = sw / 2; if (ch > sh) { ch = sh; cw = sh * 2; }
   ctx.drawImage(canvas, (sw - cw) / 2, (sh - ch) / 2, cw, ch, 0, 0, 480, 240);
   mapThumbs[id] = out.toDataURL('image/jpeg', 0.85);
   sc.traverse(o => { if (o.geometry) o.geometry.dispose(); });
@@ -167,151 +167,189 @@ function renderMapThumb(id) {
 }
 
 // ---------- Навигация ----------
+let screen = 'play';
 function goto(name) {
-  sound.init(); sound.ui();
-  if (name === 'main' && game) { $('menu').classList.add('hidden'); $('pause').classList.remove('hidden'); return; }
+  sound.init(); sound.uiClick();
+  if (game && name !== 'settings') { $('menu').classList.add('hidden'); $('pause').classList.remove('hidden'); return; }
+  screen = name;
   document.querySelectorAll('.screen').forEach(s => s.classList.toggle('active', s.id === 'screen-' + name));
-  document.querySelectorAll('#nav button').forEach(b => b.classList.toggle('on', b.dataset.goto === name || (name === 'play' && b.dataset.goto === 'main')));
-  setLobbyMode(name === 'arsenal' || name === 'cases' ? 'weapon' : 'char');
-  if (name === 'main') { setLobbyCharacter(); renderProfile(); renderSummary(); }
-  if (name === 'arsenal') renderArsenal();
-  if (name === 'cases') { renderCases(); setShowcase(primaryOf(), equippedSkin(primaryOf())); }
-  if (name === 'settings') renderSettings();
-  if (name === 'play') renderPlay();
+  document.querySelectorAll('#nav button').forEach(b => b.classList.toggle('on', b.dataset.goto === name));
+  setLobbyMode(['loadout', 'inventory', 'cases'].includes(name) ? 'weapon' : 'char');
+  renderTopbar();
+  ({ play: renderPlay, loadout: renderLoadout, inventory: renderInventory, cases: renderCases, store: renderStore, profile: renderProfile, settings: renderSettings }[name] || (() => {}))();
 }
 document.querySelectorAll('[data-goto]').forEach(b => b.addEventListener('click', () => goto(b.dataset.goto)));
-const primaryOf = () => settings.match.primary || 'ar';
 
-const level = () => Math.floor((profile.xp || 0) / 1000) + 1;
-function renderProfile() {
-  const s = profile.stats;
-  const kd = s.deaths ? (s.kills / s.deaths).toFixed(2) : s.kills.toFixed(0);
-  const hs = s.kills ? Math.round(s.headshots / s.kills * 100) : 0;
-  $('profile-card').innerHTML = `<div>Убийства<b>${s.kills}</b></div><div>K/D<b>${kd}</b></div><div>Хедшоты<b>${hs}%</b></div><div>Победы<b>${s.wins}/${s.matches}</b></div>`;
-  $('credits').textContent = profile.credits;
-  $('lvl-text').textContent = `Уровень ${level()}`;
-  $('xp-fill').style.width = ((profile.xp || 0) % 1000) / 10 + '%';
-}
-function renderSummary() {
-  const m = settings.match, map = MAPS[m.map];
-  $('match-summary').innerHTML = `${mapThumbs[m.map] ? `<img src="${mapThumbs[m.map]}">` : ''}
-    <div><div class="ms-title">${m.mode === 'ffa' ? 'Каждый сам за себя' : 'Командный бой'}</div>
-    <div class="ms-sub">Карта: ${map.name}<br>${m.mode === 'ffa' ? `${m.perTeam * 2} игроков` : `${m.perTeam} на ${m.perTeam}`} · боты «${DIFFICULTY[m.difficulty].name}» · ${WEAPONS[m.primary].short}</div></div>`;
+function renderTopbar() {
+  const li = levelInfo(profile.xp || 0);
+  $('credits').textContent = profile.credits.toLocaleString('ru');
+  $('gold').textContent = profile.gold.toLocaleString('ru');
+  $('lvl').textContent = 'Ур. ' + li.level; $('rank').textContent = li.rank;
+  $('xp-fill').style.width = (li.cur / li.need * 100) + '%';
+  $('nick').textContent = settings.nickname; $('avatar').textContent = (settings.nickname || 'M')[0].toUpperCase();
 }
 
-// ---------- Настройка матча ----------
+// ---------- Экран «Играть» ----------
 const OPTIONS = {
-  mode: [['tdm', 'Командный бой'], ['ffa', 'Каждый за себя']],
+  side: [['auto', 'Случайно'], ['A', 'Спецназ'], ['B', 'Наёмники']],
   perTeam: [[1, '1×1'], [2, '2×2'], [3, '3×3'], [4, '4×4'], [5, '5×5']],
   difficulty: Object.entries(DIFFICULTY).map(([k, v]) => [k, v.name]),
-  primary: PRIMARIES.map(id => [id, WEAPONS[id].short]),
-  killsToWin: [[10, '10'], [20, '20'], [40, '40'], [60, '60']],
-  minutes: [[4, '4 мин'], [8, '8 мин'], [12, '12 мин']],
+  rounds: [[6, 'MR6'], [12, 'MR12'], [16, 'MR16'], [24, 'MR24']],
+  killsToWin: [[20, '20'], [40, '40'], [60, '60'], [100, '100']],
+  minutes: [[5, '5 мин'], [8, '8 мин'], [12, '12 мин']],
 };
 function renderPlay() {
-  document.querySelectorAll('#screen-play .seg').forEach(seg => {
-    const key = seg.dataset.opt;
-    seg.innerHTML = '';
-    for (const [val, label] of OPTIONS[key]) {
-      const b = document.createElement('button');
-      b.innerHTML = key === 'primary' ? `${iconImg(val)}<span>${label}</span>` : label;
-      b.classList.toggle('on', settings.match[key] === val);
-      b.onclick = () => { settings.match[key] = val; saveSettings(); sound.ui(); renderPlay(); if (key === 'primary') setLobbyCharacter(); };
-      seg.appendChild(b);
-    }
-  });
-  $('per-team-label').textContent = settings.match.mode === 'ffa' ? 'Количество игроков (×2)' : 'Игроков в команде';
-  const mc = $('map-cards'); mc.innerHTML = '';
-  for (const m of Object.values(MAPS)) {
-    const b = document.createElement('button');
-    b.className = 'map-card' + (settings.match.map === m.id ? ' on' : '');
-    b.innerHTML = `${mapThumbs[m.id] ? `<img class="thumb" src="${mapThumbs[m.id]}">` : '<div class="thumb"></div>'}<div class="info"><b>${m.name}</b><small>${m.desc}</small></div>`;
-    b.onclick = () => { settings.match.map = m.id; saveSettings(); sound.ui(); renderPlay(); };
-    mc.appendChild(b);
-  }
+  const m = settings.match;
+  $('modes').innerHTML = Object.values(MODES).map(md => `<button class="mode-card ${m.mode === md.id ? 'on' : ''}" data-mode="${md.id}" style="--mc:${md.color}"><b>${md.name}</b><small>${md.desc}</small></button>`).join('');
+  $('modes').querySelectorAll('.mode-card').forEach(b => b.onclick = () => { m.mode = b.dataset.mode; saveSettings(); sound.uiClick(); renderPlay(); });
+  const seg = (key, opts) => `<div class="seg" data-opt="${key}">${opts.map(([v, l]) => `<button data-v="${v}" class="${m[key] == v ? 'on' : ''}">${l}</button>`).join('')}</div>`;
+  const rows = [];
+  rows.push(`<div class="row"><label>Карта</label><div class="maps">${Object.values(MAPS).map(mp => `<button class="map-card ${m.map === mp.id ? 'on' : ''}" data-map="${mp.id}">${mapThumbs[mp.id] ? `<img class="thumb" src="${mapThumbs[mp.id]}">` : '<div class="thumb"></div>'}<div class="info"><b>${mp.name}</b></div></button>`).join('')}</div></div>`);
+  if (m.mode !== 'ffa') rows.push(`<div class="row"><label>Сторона</label>${seg('side', OPTIONS.side)}</div>`);
+  rows.push(`<div class="row"><label>${m.mode === 'ffa' || m.mode === 'gungame' ? 'Игроков (×2)' : 'Игроков в команде'}</label>${seg('perTeam', OPTIONS.perTeam)}</div>`);
+  rows.push(`<div class="row"><label>Сложность ботов</label>${seg('difficulty', OPTIONS.difficulty)}</div>`);
+  if (m.mode === 'defuse') rows.push(`<div class="row"><label>Количество раундов</label>${seg('rounds', OPTIONS.rounds)}</div>`);
+  if (m.mode === 'tdm' || m.mode === 'ffa') { rows.push(`<div class="row"><label>Убийств до победы</label>${seg('killsToWin', OPTIONS.killsToWin)}</div>`); rows.push(`<div class="row"><label>Время</label>${seg('minutes', OPTIONS.minutes)}</div>`); }
+  $('match-card').innerHTML = `<div class="card-title">${MODES[m.mode].name}</div>` + rows.join('');
+  $('match-card').querySelectorAll('.seg').forEach(s => s.querySelectorAll('button').forEach(b => b.onclick = () => {
+    const key = s.dataset.opt, v = b.dataset.v;
+    m[key] = isNaN(+v) ? v : +v; saveSettings(); sound.uiClick(); renderPlay();
+    if (key === 'side' && v !== 'auto') setLobbyTeam(v);
+  }));
+  $('match-card').querySelectorAll('.map-card').forEach(b => b.onclick = () => { m.map = b.dataset.map; saveSettings(); sound.uiClick(); renderPlay(); });
+  $('start-sub').textContent = `${MAPS[m.map].name} · ${m.mode === 'ffa' || m.mode === 'gungame' ? m.perTeam * 2 + ' игроков' : m.perTeam + ' на ' + m.perTeam} · ${DIFFICULTY[m.difficulty].name}`;
 }
 
-// ---------- Арсенал ----------
-let arsenalWeapon = 'ar';
-const WEAPON_TAB = { ar: 'AR-7', smg: 'VX-9', sniper: 'LR-50', shotgun: 'SG-12', pistol: 'P-12', knife: 'Нож' };
-function skinInfo(s) {
-  const el = $('skin-info');
-  if (!s) { el.innerHTML = `<div class="si-rar" style="color:#888">Базовый</div><div class="si-name">${WEAPONS[arsenalWeapon].name}</div>`; return; }
-  const r = RARITY[s.rarity];
-  el.innerHTML = `<div class="si-rar" style="color:${r.color}">${r.name}</div><div class="si-name">${WEAPON_TAB[s.weapon]} | ${s.name}</div>${profile.owned.includes(s.id) ? '' : '<div class="hint">Можно получить из кейса</div>'}`;
+// ---------- Снаряжение ----------
+let loTeam = 'A', loSlot = 'primary';
+const SLOT_NAMES = { primary: 'Основное', secondary: 'Пистолет', knife: 'Нож' };
+function weaponStatsBars(id) {
+  const w = WEAPONS[id];
+  if (!w) return '';
+  const dmg = Math.min(100, w.damage * (w.pellets || 1) / 1.2), rate = Math.min(100, w.rpm / 9), acc = Math.max(5, 100 - w.spread * 9000 - w.moveSpread * 300), mob = Math.min(100, w.speed * 85), mag = Math.min(100, w.mag / 0.45);
+  const bar = (n, v, t) => `<div>${n}<i style="--v:${v}%"></i><em>${t}</em></div>`;
+  return `<div class="stat-bars">${bar('Урон', dmg, w.damage + (w.pellets ? '×' + w.pellets : ''))}${bar('Скорострельность', rate, w.rpm)}${bar('Точность', acc, Math.round(acc))}${bar('Мобильность', mob, Math.round(w.speed * 100))}${bar('Магазин', mag, w.mag)}${bar('Бронепробитие', w.pen * 100, Math.round(w.pen * 100) + '%')}</div>`;
 }
-function renderArsenal() {
-  const tabs = $('arsenal-tabs'); tabs.innerHTML = '';
-  for (const w of SKIN_WEAPONS) {
-    const b = document.createElement('button'); b.innerHTML = `${iconImg(w)}<span>${WEAPON_TAB[w]}</span>`;
-    b.classList.toggle('on', w === arsenalWeapon);
-    b.onclick = () => { arsenalWeapon = w; sound.ui(); renderArsenal(); };
-    tabs.appendChild(b);
-  }
-  const grid = $('skin-grid'); grid.innerHTML = '';
-  const eq = profile.equipped[arsenalWeapon] || null;
-  const order = Object.keys(RARITY);
-  const items = [{ id: null, name: 'Стандарт', rarity: null }, ...Object.values(SKINS).filter(s => s.weapon === arsenalWeapon)
-    .sort((a, b) => (profile.owned.includes(b.id) - profile.owned.includes(a.id)) || order.indexOf(b.rarity) - order.indexOf(a.rarity))];
-  for (const s of items) {
-    const owned = s.id === null || profile.owned.includes(s.id);
-    const el = document.createElement('button');
-    el.className = 'skin' + (eq === s.id ? ' on' : '') + (owned ? '' : ' locked');
-    if (s.rarity) el.style.setProperty('--rc', RARITY[s.rarity].color);
-    el.innerHTML = `${s.id ? `<img class="sw" src="${skinPreviewURL(s)}">` : '<div class="sw def"></div>'}<div class="nm">${s.name}</div>
-      <div class="rr" style="color:${s.rarity ? RARITY[s.rarity].color : '#888'}">${s.rarity ? RARITY[s.rarity].name : 'Базовый'}${owned ? '' : ' · нет'}</div>${eq === s.id ? '<span class="eq">ВЫБРАН</span>' : ''}`;
-    el.onmouseenter = () => { setShowcase(arsenalWeapon, s.id ? s : null); skinInfo(s.id ? s : null); };
-    el.onclick = () => {
-      setShowcase(arsenalWeapon, s.id ? s : null); skinInfo(s.id ? s : null);
-      if (!owned) { sound.click(); return; }
-      equip(arsenalWeapon, s.id); sound.ui(); renderArsenal();
+function renderLoadout() {
+  const lo = profile.loadout[loTeam];
+  $('lo-team').innerHTML = ['A', 'B'].map(t => `<button data-t="${t}" class="${loTeam === t ? 'on' : ''}">${t === 'A' ? 'Спецназ' : 'Наёмники'}</button>`).join('');
+  $('lo-team').querySelectorAll('button').forEach(b => b.onclick = () => { loTeam = b.dataset.t; sound.uiClick(); renderLoadout(); });
+  const cur = { primary: lo.primary, secondary: lo.secondary, knife: profile.knife };
+  $('lo-slots').innerHTML = Object.entries(SLOT_NAMES).map(([s, n]) => `<button class="lo-slot ${loSlot === s ? 'on' : ''}" data-s="${s}"><small>${n}</small><b>${itemName(cur[s])}</b>${iconImg(cur[s])}</button>`).join('');
+  $('lo-slots').querySelectorAll('.lo-slot').forEach(b => b.onclick = () => { loSlot = b.dataset.s; sound.uiClick(); renderLoadout(); });
+  let list;
+  if (loSlot === 'knife') list = Object.keys(KNIVES);
+  else list = Object.values(WEAPONS).filter(w => (loSlot === 'secondary') === (w.cat === 'pistol') && weaponAvailableFor(loTeam, w.id)).map(w => w.id);
+  const owned = ownedKnives();
+  $('lo-list').innerHTML = list.map(id => {
+    const locked = loSlot === 'knife' && !owned.includes(id);
+    const w = WEAPONS[id];
+    return `<button class="wcard ${cur[loSlot] === id ? 'on' : ''} ${locked ? 'locked' : ''}" data-id="${id}">${iconImg(id)}<b>${itemName(id)}</b><small>${w ? CATS[w.cat] : locked ? 'Из кейса «Клинок»' : 'Нож'}</small>${w ? `<span class="price">$${w.price}</span>` : ''}</button>`;
+  }).join('');
+  $('lo-list').querySelectorAll('.wcard').forEach(b => {
+    b.onmouseenter = () => loInfo(b.dataset.id);
+    b.onclick = () => {
+      const id = b.dataset.id;
+      if (b.classList.contains('locked')) { toast('Этот нож можно получить из кейса «Клинок»'); return; }
+      if (loSlot === 'knife') profile.knife = id; else lo[loSlot] = id;
+      saveProfile(); sound.uiClick(); renderLoadout();
+      if (loSlot === 'primary' && lobby.team === loTeam) setLobbyCharacter();
     };
-    grid.appendChild(el);
-  }
-  const cur = equippedSkin(arsenalWeapon);
-  setShowcase(arsenalWeapon, cur); skinInfo(cur);
+  });
+  loInfo(cur[loSlot]);
+}
+function loInfo(id) {
+  const skin = equippedSkin(id);
+  setShowcase(id, skin);
+  const w = WEAPONS[id];
+  const skins = Object.values(SKINS).filter(s => s.weapon === id && profile.owned.includes(s.id));
+  $('lo-info').innerHTML = `<div class="card"><div class="wsub">${w ? CATS[w.cat] : 'Нож'}${w ? ` · $${w.price}` : ''}</div><div class="wname">${itemName(id)}</div>
+    ${skin ? `<div style="color:${RARITY[skin.rarity].color};font-weight:700">${skin.name}</div>` : ''}
+    <div style="margin-top:10px">${weaponStatsBars(id)}</div>
+    <div class="card-title" style="margin-top:12px">Скины (${skins.length})</div>
+    <div class="skin-grid" style="max-height:170px">${[{ id: '', name: 'Стандарт' }, ...skins].map(s => `<button class="skin ${(profile.equipped[id] || '') === s.id ? 'on' : ''}" data-sk="${s.id}" ${s.rarity ? `style="--rc:${RARITY[s.rarity].color}"` : ''}>${s.id ? `<img class="sw" src="${skinPreviewURL(s)}">` : '<div class="sw" style="background:#2a313a"></div>'}<div class="nm">${s.name}</div></button>`).join('')}</div></div>`;
+  $('lo-info').querySelectorAll('[data-sk]').forEach(b => b.onclick = () => { equip(id, b.dataset.sk || null); sound.uiClick(); loInfo(id); if (lobby.char) setLobbyCharacter(); });
+}
+
+// ---------- Инвентарь ----------
+let invFilter = 'all', invRarity = 'all', invSel = null;
+function renderInventory() {
+  const cats = [['all', 'Все'], ...CAT_ORDER.map(c => [c, CATS[c]]), ['knife', 'Ножи']];
+  $('inv-filter').innerHTML = cats.map(([k, n]) => `<button data-k="${k}" class="${invFilter === k ? 'on' : ''}">${n}</button>`).join('');
+  $('inv-filter').querySelectorAll('button').forEach(b => b.onclick = () => { invFilter = b.dataset.k; renderInventory(); });
+  $('inv-rarity').innerHTML = [['all', 'Любая'], ...RARITY_ORDER.map(r => [r, RARITY[r].name])].map(([k, n]) => `<button data-k="${k}" class="${invRarity === k ? 'on' : ''}" ${k !== 'all' ? `style="color:${RARITY[k].color}"` : ''}>${n}</button>`).join('');
+  $('inv-rarity').querySelectorAll('button').forEach(b => b.onclick = () => { invRarity = b.dataset.k; renderInventory(); });
+  const items = profile.owned.map(id => SKINS[id]).filter(Boolean)
+    .filter(s => invFilter === 'all' || (invFilter === 'knife' ? KNIVES[s.weapon] : WEAPONS[s.weapon] && WEAPONS[s.weapon].cat === invFilter))
+    .filter(s => invRarity === 'all' || s.rarity === invRarity)
+    .sort((a, b) => RARITY_ORDER.indexOf(b.rarity) - RARITY_ORDER.indexOf(a.rarity));
+  $('inv-count').textContent = `${profile.owned.length} предметов`;
+  $('inv-grid').innerHTML = items.length ? items.map(s => `<button class="skin ${invSel === s.id ? 'on' : ''}" data-id="${s.id}" style="--rc:${RARITY[s.rarity].color}"><img class="sw" src="${skinPreviewURL(s)}">${iconImg(s.weapon)}<div class="nm">${itemName(s.weapon).split(' «')[0]} | ${s.name}</div><div class="rr" style="color:${RARITY[s.rarity].color}">${RARITY[s.rarity].name}</div>${profile.equipped[s.weapon] === s.id ? '<span class="eq">ВЫБРАН</span>' : ''}</button>`).join('')
+    : '<p class="hint">Пусто. Открывайте кейсы, чтобы получить скины и ножи.</p>';
+  $('inv-grid').querySelectorAll('.skin').forEach(b => b.onclick = () => { invSel = b.dataset.id; sound.uiClick(); renderInventory(); });
+  invInfo();
+}
+function invInfo() {
+  const s = SKINS[invSel];
+  if (!s || !profile.owned.includes(s.id)) { $('inv-info').innerHTML = ''; return; }
+  setShowcase(s.weapon, s);
+  const eq = profile.equipped[s.weapon] === s.id;
+  $('inv-info').innerHTML = `<div class="card"><div class="wsub" style="color:${RARITY[s.rarity].color}">${RARITY[s.rarity].name}</div><div class="wname">${itemName(s.weapon).split(' «')[0]} | ${s.name}</div>
+    <div class="btn-row" style="margin-top:12px"><button class="btn" id="inv-eq">${eq ? 'Снять' : 'Экипировать'}</button><button class="btn danger" id="inv-sell">Продать · ◈ ${RARITY[s.rarity].sell * 10}</button></div></div>`;
+  $('inv-eq').onclick = () => { equip(s.weapon, eq ? null : s.id); if (!eq && KNIVES[s.weapon]) profile.knife = s.weapon; saveProfile(); sound.uiClick(); renderInventory(); };
+  $('inv-sell').onclick = () => { const v = sellSkin(s.id); toast(`Продано за ◈ ${v}`); invSel = null; renderTopbar(); renderInventory(); };
 }
 
 // ---------- Кейсы ----------
 function renderCases() {
-  renderProfile();
-  const list = $('case-list'); list.innerHTML = '';
-  for (const c of CASES) {
+  renderTopbar();
+  setShowcase(profile.loadout.A.primary, equippedSkin(profile.loadout.A.primary));
+  $('case-list').innerHTML = CASES.map(c => {
+    const pr = casePrice(c);
     const total = Object.values(c.weights).reduce((a, b) => a + b, 0);
-    const odds = Object.entries(c.weights).map(([r, w]) => `<span style="color:${RARITY[r].color}">${RARITY[r].name}: ${(w / total * 100).toFixed(1)}%</span>`).join('<br>');
-    const el = document.createElement('div');
-    el.className = 'case'; el.style.setProperty('--cc', c.color);
-    el.innerHTML = `<div class="box"><div class="crate3d"></div></div><h3>${c.name}</h3><div class="odds">${odds}</div>
-      <button ${profile.credits < c.price ? 'disabled' : ''}>Открыть · ◆ ${c.price}</button>`;
-    el.querySelector('button').onclick = () => startCaseOpen(c);
-    list.appendChild(el);
-  }
+    const odds = Object.entries(c.weights).map(([r, w]) => `<span style="color:${RARITY[r].color}">${RARITY[r].name} ${(w / total * 100).toFixed(1)}%</span>`).join(' · ');
+    const n = profile.cases[c.id] || 0;
+    return `<div class="case" style="--cc:${c.color}"><div class="box"><div class="crate3d"></div>${n ? `<span class="count">×${n}</span>` : ''}</div><h3>${c.name}</h3>
+      <div class="hint" style="font-size:11px;line-height:1.5">${odds}</div>
+      <div class="btn-row"><button class="btn ghost" data-view="${c.id}">Содержимое</button></div>
+      <div class="btn-row"><button class="btn ghost" data-buy="${c.id}">Купить · ${pr.cur === 'gold' ? '●' : '◈'} ${pr.amount}</button><button class="btn" data-open="${c.id}" ${n ? '' : 'disabled'}>Открыть</button></div></div>`;
+  }).join('');
+  $('case-list').querySelectorAll('[data-buy]').forEach(b => b.onclick = () => { const c = CASES.find(x => x.id === b.dataset.buy); if (buyCase(c)) { sound.buy(); toast(`${c.name} добавлен в инвентарь`); renderCases(); } else toast('Недостаточно валюты — загляните в магазин'); });
+  $('case-list').querySelectorAll('[data-open]').forEach(b => b.onclick = () => startCaseOpen(CASES.find(x => x.id === b.dataset.open)));
+  $('case-list').querySelectorAll('[data-view]').forEach(b => b.onclick = () => {
+    const c = CASES.find(x => x.id === b.dataset.view);
+    const items = caseContents(c).sort((a, b) => RARITY_ORDER.indexOf(b.rarity) - RARITY_ORDER.indexOf(a.rarity));
+    $('modal-title').textContent = c.name;
+    $('modal-body').innerHTML = `<div class="skin-grid">${items.map(skinCard).join('')}</div>`;
+    $('modal').classList.remove('hidden');
+  });
 }
+$('modal-close').onclick = () => $('modal').classList.add('hidden');
 function skinCard(s) {
-  return `<div class="skin" style="--rc:${RARITY[s.rarity].color}"><img class="sw" src="${skinPreviewURL(s)}"><div class="nm">${s.name}</div><div class="rr" style="color:${RARITY[s.rarity].color}">${WEAPON_TAB[s.weapon]}</div></div>`;
+  return `<div class="skin" style="--rc:${RARITY[s.rarity].color}"><img class="sw" src="${skinPreviewURL(s)}">${iconImg(s.weapon)}<div class="nm">${s.name}</div><div class="rr" style="color:${RARITY[s.rarity].color}">${itemName(s.weapon).split(' «')[0]}</div></div>`;
 }
+let lastOpened = null;
 function startCaseOpen(c) {
   sound.init();
   const res = openCase(c);
   if (!res) return;
-  renderProfile();
+  lastOpened = res;
+  renderTopbar();
+  const pool = caseContents(c);
   const N = 50, WIN = 42;
   const items = [];
-  for (let i = 0; i < N; i++) items.push(i === WIN ? res.skin : randomFiller(c));
+  for (let i = 0; i < N; i++) items.push(i === WIN ? res.skin : pool[Math.floor(Math.random() * pool.length)]);
   const strip = $('roulette-strip');
   strip.innerHTML = items.map(skinCard).join('');
   strip.style.transition = 'none'; strip.style.transform = 'translateX(0)';
   $('case-open-title').textContent = c.name;
   $('case-result').innerHTML = '';
-  $('case-close').classList.add('hidden');
+  $('case-close').parentElement.classList.add('hidden');
   $('case-open').classList.remove('hidden');
-  const cardW = 126, boxW = strip.parentElement.clientWidth;
-  const offset = WIN * cardW + 60 - boxW / 2 + (Math.random() - 0.5) * 90;
+  const cardW = 130, boxW = strip.parentElement.clientWidth;
+  const offset = WIN * cardW + 62 - boxW / 2 + (Math.random() - 0.5) * 90;
   let lastIdx = -1;
-  requestAnimationFrame(() => requestAnimationFrame(() => {
-    strip.style.transition = 'transform 5.2s cubic-bezier(0.1, 0.7, 0.12, 1)';
-    strip.style.transform = `translateX(${-offset}px)`;
-  }));
+  requestAnimationFrame(() => requestAnimationFrame(() => { strip.style.transition = 'transform 5.2s cubic-bezier(0.1, 0.7, 0.12, 1)'; strip.style.transform = `translateX(${-offset}px)`; }));
   const tick = setInterval(() => {
     const m = new DOMMatrix(getComputedStyle(strip).transform);
     const idx = Math.floor((-m.m41 + boxW / 2) / cardW);
@@ -321,50 +359,126 @@ function startCaseOpen(c) {
     clearInterval(tick);
     sound.reward();
     const r = RARITY[res.skin.rarity];
-    $('case-result').innerHTML = `<span style="color:${r.color}">${WEAPON_TAB[res.skin.weapon]} | ${res.skin.name}</span>
-      <small>${r.name}${res.duplicate ? ` · уже есть, продано за ◆ ${r.sell}` : ' · добавлено в арсенал'}</small>`;
-    $('case-close').classList.remove('hidden');
-    renderProfile();
+    $('case-result').innerHTML = `<span style="color:${r.color}">${itemName(res.skin.weapon).split(' «')[0]} | ${res.skin.name}</span><small>${r.name}${res.duplicate ? ` · дубликат, продан за ◈ ${r.sell * 10}` : ''}</small>`;
+    $('case-sell').style.display = res.duplicate ? 'none' : '';
+    $('case-close').parentElement.classList.remove('hidden');
+    renderTopbar();
     setShowcase(res.skin.weapon, res.skin);
   }, 5400);
 }
 $('case-close').onclick = () => { $('case-open').classList.add('hidden'); renderCases(); };
+$('case-sell').onclick = () => { if (lastOpened && !lastOpened.duplicate) { const v = sellSkin(lastOpened.skin.id); toast(`Продано за ◈ ${v}`); } $('case-open').classList.add('hidden'); renderCases(); };
+
+// ---------- Магазин ----------
+function renderStore() {
+  const avail = dailyAvailable();
+  $('daily').innerHTML = `<div><b>Ежедневная награда</b><div class="hint">Заходите каждый день: серия до 7 дней, каждый третий день — кейс.</div></div>
+    <div class="days">${[1, 2, 3, 4, 5, 6, 7].map(d => `<i class="${d <= profile.streak ? 'got' : ''}">${d}</i>`).join('')}</div>
+    <button class="btn" id="daily-btn" ${avail ? '' : 'disabled'}>${avail ? 'Забрать' : 'Завтра'}</button>`;
+  $('daily-btn').onclick = () => { const r = claimDaily(); if (r) { sound.reward(); toast(`+◈ ${r.credits} и +● ${r.gold} (день ${r.streak})`); renderTopbar(); renderStore(); } };
+  $('store-grid').innerHTML = STORE.map(it => {
+    const done = it.once && profile.purchases[it.id];
+    const art = it.gold && !it.credits ? `<div class="art gd">●</div>` : it.credits && !it.gold ? `<div class="art cr">◈</div>` : `<div class="art gd">🎁</div>`;
+    const what = [it.gold ? `● ${it.gold} золота` : '', it.credits ? `◈ ${it.credits.toLocaleString('ru')} кредитов` : '', ...Object.entries(it.cases || {}).map(([c, n]) => `${CASES.find(x => x.id === c).name} ×${n}`)].filter(Boolean).join('<br>');
+    return `<div class="store-item">${it.tag ? `<span class="tag">${it.tag}</span>` : ''}${art}<h3>${it.title}</h3><div class="hint">${what}</div>
+      <button class="btn" data-id="${it.id}" ${done ? 'disabled' : ''}><span>${done ? 'Куплено' : 'Купить'}</span><span>${it.price} ₴</span></button></div>`;
+  }).join('');
+  $('store-grid').querySelectorAll('[data-id]').forEach(b => b.onclick = () => { const it = STORE.find(x => x.id === b.dataset.id); if (buyStoreItem(it)) { sound.reward(); toast(`Получено: ${it.title}`); renderTopbar(); renderStore(); } });
+}
+
+// ---------- Профиль ----------
+function renderProfile() {
+  setLobbyMode('char');
+  const s = profile.stats, li = levelInfo(profile.xp || 0);
+  const kd = s.deaths ? (s.kills / s.deaths).toFixed(2) : s.kills;
+  const hs = s.kills ? Math.round(s.headshots / s.kills * 100) : 0;
+  const wr = s.matches ? Math.round(s.wins / s.matches * 100) : 0;
+  const top = Object.entries(s.perWeapon || {}).sort((a, b) => b[1] - a[1]).slice(0, 5);
+  $('profile-panel').innerHTML = `<div class="prof-head"><div class="avatar">${esc((settings.nickname || 'M')[0].toUpperCase())}</div><div><h2>${esc(settings.nickname)}</h2><div class="hint">Уровень ${li.level} · ${li.rank} · ${li.cur}/${li.need} опыта</div></div></div>
+    <div class="nick-row" style="margin-bottom:14px"><input id="nick-in" maxlength="16" value="${esc(settings.nickname)}"><button class="btn ghost" id="nick-save">Сменить ник</button></div>
+    <div class="stat-grid"><div>Матчей<b>${s.matches}</b></div><div>Победы<b>${wr}%</b></div><div>Убийства<b>${s.kills}</b></div><div>Смерти<b>${s.deaths}</b></div><div>K/D<b>${kd}</b></div><div>Хедшоты<b>${hs}%</b></div><div>Урон<b>${Math.round(s.damage || 0)}</b></div><div>Закладок<b>${s.plants}</b></div><div>Разминирований<b>${s.defuses}</b></div><div>Скинов<b>${profile.owned.length}</b></div></div>
+    <div class="card-title">Любимое оружие</div>
+    <div class="lo-list">${top.length ? top.map(([id, n]) => `<div class="wcard">${iconImg(id)}<b>${itemName(id)}</b><small>${n} убийств</small></div>`).join('') : '<p class="hint">Сыграйте матч, чтобы появилась статистика.</p>'}</div>
+    <div class="card-title" style="margin-top:14px">Последние матчи</div>
+    <div>${(profile.history || []).slice(-8).reverse().map(h => `<div class="set-row"><span style="width:110px;color:${h.win ? 'var(--ok)' : h.draw ? '#ccc' : 'var(--danger)'};font-weight:700">${h.win ? 'Победа' : h.draw ? 'Ничья' : 'Поражение'}</span><span style="width:170px">${MODES[h.mode] ? MODES[h.mode].name : h.mode}</span><span style="width:90px">${MAPS[h.map] ? MAPS[h.map].name : ''}</span><span>${h.k}/${h.d} · ${h.score}</span></div>`).join('') || '<p class="hint">История пуста.</p>'}</div>`;
+  $('nick-save').onclick = () => { const v = $('nick-in').value.trim().slice(0, 16); if (v) { settings.nickname = v; saveSettings(); renderTopbar(); renderProfile(); toast('Ник изменён'); } };
+}
 
 // ---------- Настройки ----------
 let refreshHz = 60;
+const opt = (key, label, type, extra = {}) => ({ key, label, type, ...extra });
 const SETTINGS_TABS = {
-  'Управление': [
-    { key: 'sens', label: 'Чувствительность мыши', type: 'range', min: 0.1, max: 5, step: 0.05 },
-    { key: 'touchSens', label: 'Чувствительность сенсора', type: 'range', min: 0.1, max: 5, step: 0.05 },
-    { key: 'aimSens', label: 'Множитель в прицеле', type: 'range', min: 0.2, max: 2, step: 0.05 },
-    { key: 'invertY', label: 'Инверсия по вертикали', type: 'bool' },
-    { key: 'controls', label: 'Тип управления', type: 'select', options: [['auto', 'Авто'], ['touch', 'Сенсор'], ['mouse', 'Мышь']] },
-    { key: 'aimToggle', label: 'Прицел нажатием (а не удержанием)', type: 'bool' },
-    { type: 'button', label: 'Расстановка кнопок (сенсор)', action: () => openLayoutEditor() },
-  ],
   'Графика': [
-    { key: 'fpsCap', label: 'Лимит FPS', type: 'select', options: [[30, '30'], [60, '60'], [90, '90'], [120, '120'], [144, '144'], [0, 'Без лимита']],
-      note: () => (refreshHz >= 30 ? `Частота вашего экрана: ~${refreshHz} Гц. ` : '') + '120 FPS возможны на экранах 120 Гц и выше (телефоны с 120 Гц, игровые мониторы).' },
-    { key: 'quality', label: 'Качество графики', type: 'select', options: [['low', 'Низкое'], ['medium', 'Среднее'], ['high', 'Высокое']],
-      note: () => 'Низкое — без теней (макс. FPS на телефонах). Высокое — тени 4K, bloom, сглаживание MSAA.' },
-    { key: 'fov', label: 'Поле зрения (FOV)', type: 'range', min: 60, max: 110, step: 1 },
-    { key: 'renderScale', label: 'Масштаб рендера', type: 'range', min: 0.5, max: 1.5, step: 0.05 },
-    { key: 'showFps', label: 'Показывать FPS', type: 'bool' },
+    { group: 'Общее' },
+    opt('preset', 'Пресет качества', 'select', { options: [['low', 'Низкий'], ['medium', 'Средний'], ['high', 'Высокий'], ['ultra', 'Ультра']], apply: (v) => applyPreset(v), note: () => 'Пресет меняет все параметры ниже.' }),
+    opt('fpsCap', 'Лимит FPS', 'select', { options: [[30, '30'], [60, '60'], [90, '90'], [120, '120'], [144, '144'], [0, 'Без лимита']], note: () => (refreshHz >= 30 ? `Частота экрана: ~${refreshHz} Гц. ` : '') + '120 FPS — на экранах 120 Гц и выше.' }),
+    opt('renderScale', 'Разрешение рендера', 'range', { min: 0.5, max: 1.5, step: 0.05, fmt: v => Math.round(v * 100) + '%' }),
+    opt('fov', 'Поле зрения (FOV)', 'range', { min: 60, max: 110, step: 1 }),
+    opt('vmFov', 'FOV оружия в руках', 'range', { min: 45, max: 75, step: 1 }),
+    { group: 'Детали' },
+    opt('shadows', 'Тени', 'select', { options: [['off', 'Выкл'], ['medium', 'Средние'], ['high', 'Высокие'], ['ultra', 'Ультра']] }),
+    opt('texQuality', 'Текстуры', 'select', { options: [['low', 'Низкие'], ['high', 'Высокие']] }),
+    opt('antialias', 'Сглаживание (MSAA)', 'bool', { note: () => 'Применяется после перезапуска игры.' }),
+    opt('bloom', 'Свечение (Bloom)', 'bool'),
+    opt('ao', 'Затенение (GTAO)', 'bool', { note: () => 'Реалистичные тени в углах. Требовательно к видеокарте.' }),
+    opt('effects', 'Эффекты', 'select', { options: [['low', 'Низкие'], ['high', 'Высокие']] }),
+    opt('viewDist', 'Дальность прорисовки', 'select', { options: [['low', 'Низкая'], ['high', 'Высокая']] }),
   ],
-  'Звук': [
-    { key: 'volume', label: 'Громкость', type: 'range', min: 0, max: 1, step: 0.05 },
+  'Управление': [
+    { group: 'Мышь' },
+    opt('sens', 'Чувствительность', 'range', { min: 0.1, max: 5, step: 0.05 }),
+    opt('aimSens', 'Множитель при прицеливании', 'range', { min: 0.2, max: 2, step: 0.05 }),
+    opt('scopeSens', 'Множитель в оптике', 'range', { min: 0.2, max: 2, step: 0.05 }),
+    opt('invertY', 'Инверсия по вертикали', 'bool'),
+    { group: 'Поведение' },
+    opt('controls', 'Тип управления', 'select', { options: [['auto', 'Авто'], ['touch', 'Сенсор'], ['mouse', 'Мышь и клавиатура']] }),
+    opt('aimToggle', 'Прицел нажатием (а не удержанием)', 'bool'),
+    opt('autoReload', 'Автоперезарядка', 'bool'),
+    { type: 'keys' },
+  ],
+  'Сенсор': [
+    opt('touchSens', 'Чувствительность обзора', 'range', { min: 0.1, max: 5, step: 0.05 }),
+    opt('touchAimSens', 'Множитель при прицеливании', 'range', { min: 0.2, max: 2, step: 0.05 }),
+    opt('gyro', 'Гироскоп', 'bool', { note: () => 'Поворачивайте телефон для точного прицеливания.' }),
+    opt('gyroSens', 'Чувствительность гироскопа', 'range', { min: 0.2, max: 3, step: 0.05 }),
+    opt('gyroAimOnly', 'Гироскоп только в прицеле', 'bool'),
+    { type: 'button', label: 'Расстановка кнопок', action: () => openLayoutEditor() },
+  ],
+  'Интерфейс': [
+    opt('hudScale', 'Размер интерфейса', 'range', { min: 0.7, max: 1.3, step: 0.05, fmt: v => Math.round(v * 100) + '%' }),
+    opt('radarSize', 'Размер радара', 'range', { min: 0.6, max: 1.5, step: 0.05, fmt: v => Math.round(v * 100) + '%' }),
+    opt('radarZoom', 'Масштаб радара', 'range', { min: 0.5, max: 2, step: 0.05 }),
+    opt('radarRotate', 'Вращать радар', 'bool'),
+    opt('showFps', 'Показывать FPS', 'bool'),
+    opt('hitmarkers', 'Хитмаркеры', 'bool'),
+    opt('damageNumbers', 'Цифры урона', 'bool'),
+    opt('killfeed', 'Лента убийств', 'bool'),
+    opt('bobbing', 'Покачивание оружия', 'bool'),
   ],
   'Прицел': [
-    { key: 'crosshair.color', label: 'Цвет', type: 'color' },
-    { key: 'crosshair.size', label: 'Длина линий', type: 'range', min: 1, max: 20, step: 1 },
-    { key: 'crosshair.gap', label: 'Отступ', type: 'range', min: -2, max: 16, step: 1 },
-    { key: 'crosshair.thick', label: 'Толщина', type: 'range', min: 1, max: 6, step: 1 },
-    { key: 'crosshair.dot', label: 'Точка в центре', type: 'bool' },
-    { key: 'crosshair.outline', label: 'Обводка', type: 'bool' },
+    opt('crosshair.style', 'Стиль', 'select', { options: [['cross', 'Крест'], ['t', 'T-образный'], ['dot', 'Точка'], ['circle', 'Круг']] }),
+    opt('crosshair.color', 'Цвет', 'color'),
+    opt('crosshair.size', 'Длина линий', 'range', { min: 1, max: 20, step: 1 }),
+    opt('crosshair.gap', 'Отступ', 'range', { min: -2, max: 16, step: 1 }),
+    opt('crosshair.thick', 'Толщина', 'range', { min: 1, max: 6, step: 1 }),
+    opt('crosshair.alpha', 'Прозрачность', 'range', { min: 0.2, max: 1, step: 0.05 }),
+    opt('crosshair.dot', 'Точка в центре', 'bool'),
+    opt('crosshair.outline', 'Обводка', 'bool'),
+    opt('crosshair.dynamic', 'Динамический (разброс)', 'bool'),
     { type: 'preview' },
   ],
+  'Звук': [
+    opt('volume', 'Общая громкость', 'range', { min: 0, max: 1, step: 0.05, fmt: v => Math.round(v * 100) + '%' }),
+    opt('sfxVolume', 'Эффекты', 'range', { min: 0, max: 1, step: 0.05, fmt: v => Math.round(v * 100) + '%' }),
+    opt('uiVolume', 'Интерфейс', 'range', { min: 0, max: 1, step: 0.05, fmt: v => Math.round(v * 100) + '%' }),
+  ],
+  'Игра': [
+    { type: 'button', label: 'Сбросить все настройки', action: () => { resetSettings(); hud.applyCrosshair(); renderSettings(); toast('Настройки сброшены'); } },
+    { type: 'button', label: 'Сбросить прогресс (профиль)', action: () => { if (confirm('Удалить весь прогресс, скины и валюту?')) { localStorage.removeItem('maxi_profile_v2'); location.reload(); } } },
+    { type: 'about' },
+  ],
 };
-let settingsTab = 'Управление';
+let settingsTab = 'Графика';
 const getK = (k) => k.split('.').reduce((o, p) => o[p], settings);
 const setK = (k, v) => { const parts = k.split('.'); const last = parts.pop(); parts.reduce((o, p) => o[p], settings)[last] = v; };
 
@@ -372,28 +486,36 @@ function renderSettings() {
   const tabs = $('settings-tabs'); tabs.innerHTML = '';
   for (const t of Object.keys(SETTINGS_TABS)) {
     const b = document.createElement('button'); b.textContent = t; b.classList.toggle('on', t === settingsTab);
-    b.onclick = () => { settingsTab = t; sound.ui(); renderSettings(); };
+    b.onclick = () => { settingsTab = t; sound.uiClick(); renderSettings(); };
     tabs.appendChild(b);
   }
+  if (game) { const back = document.createElement('button'); back.textContent = '‹ Назад к игре'; back.onclick = () => { $('menu').classList.add('hidden'); $('pause').classList.remove('hidden'); }; tabs.appendChild(back); }
   const body = $('settings-body'); body.innerHTML = '';
   for (const item of SETTINGS_TABS[settingsTab]) {
+    if (item.group) { const g = document.createElement('div'); g.className = 'set-group'; g.textContent = item.group; body.appendChild(g); continue; }
     const row = document.createElement('div'); row.className = 'set-row';
     if (item.type === 'button') {
       const b = document.createElement('button'); b.className = 'act'; b.textContent = item.label; b.onclick = item.action; row.appendChild(b);
     } else if (item.type === 'preview') {
       row.innerHTML = '<label>Предпросмотр</label><div class="ch-preview"><div class="crosshair" id="ch-prev"><i class="t"></i><i class="b"></i><i class="l"></i><i class="r"></i><i class="d"></i></div></div>';
+    } else if (item.type === 'keys') {
+      row.innerHTML = `<div class="hint" style="line-height:2"><kbd>WASD</kbd> движение · <kbd>ЛКМ</kbd> огонь · <kbd>ПКМ</kbd> прицел · <kbd>R</kbd> перезарядка · <kbd>Пробел</kbd> прыжок · <kbd>Ctrl</kbd> присед · <kbd>Shift</kbd> шаг · <kbd>1-5</kbd> оружие/гранаты/бомба · <kbd>Q</kbd> прошлое оружие · <kbd>B</kbd> закупка · <kbd>E</kbd> заложить/обезвредить · <kbd>G</kbd> бросить бомбу · <kbd>F</kbd> осмотр · <kbd>Tab</kbd> счёт · <kbd>Esc</kbd> пауза</div>`;
+    } else if (item.type === 'about') {
+      row.innerHTML = `<div class="hint" style="line-height:1.7">MAXI STRIKE · браузерный тактический шутер.<br>Ассеты: модели оружия Flat Guns, текстуры ambientCG, HDRI Poly Haven, звуки Free Firearm Sound Library — CC0. Персонаж — из примеров three.js.</div>`;
     } else {
       const lab = document.createElement('label'); lab.textContent = item.label; row.appendChild(lab);
       const v = getK(item.key);
       if (item.type === 'range') {
         const inp = document.createElement('input'); Object.assign(inp, { type: 'range', min: item.min, max: item.max, step: item.step, value: v });
-        const val = document.createElement('span'); val.className = 'val'; val.textContent = (+v).toFixed(item.step < 1 ? 2 : 0);
-        inp.oninput = () => { setK(item.key, +inp.value); val.textContent = (+inp.value).toFixed(item.step < 1 ? 2 : 0); onSettingChanged(item.key); };
+        const val = document.createElement('span'); val.className = 'val';
+        const fmt = item.fmt || ((x) => (+x).toFixed(item.step < 1 ? 2 : 0));
+        val.textContent = fmt(+v);
+        inp.oninput = () => { setK(item.key, +inp.value); val.textContent = fmt(+inp.value); onSettingChanged(item.key); };
         row.append(inp, val);
       } else if (item.type === 'bool') {
-        const inp = document.createElement('input'); inp.type = 'checkbox'; inp.checked = !!v;
-        inp.onchange = () => { setK(item.key, inp.checked); onSettingChanged(item.key); };
-        row.appendChild(inp);
+        const t = document.createElement('button'); t.className = 'toggle' + (v ? ' on' : '');
+        t.onclick = () => { setK(item.key, !getK(item.key)); t.classList.toggle('on'); sound.uiClick(); onSettingChanged(item.key); };
+        row.appendChild(t);
       } else if (item.type === 'color') {
         const inp = document.createElement('input'); inp.type = 'color'; inp.value = v;
         inp.oninput = () => { setK(item.key, inp.value); onSettingChanged(item.key); };
@@ -402,7 +524,7 @@ function renderSettings() {
         const seg = document.createElement('div'); seg.className = 'seg';
         for (const [val, label] of item.options) {
           const b = document.createElement('button'); b.textContent = label; b.classList.toggle('on', v === val);
-          b.onclick = () => { setK(item.key, val); onSettingChanged(item.key); sound.ui(); renderSettings(); };
+          b.onclick = () => { if (item.apply) item.apply(val); else setK(item.key, val); if (item.key !== 'preset') settings.preset = 'custom'; onSettingChanged(item.key); sound.uiClick(); renderSettings(); };
           seg.appendChild(b);
         }
         row.appendChild(seg);
@@ -412,7 +534,6 @@ function renderSettings() {
     body.appendChild(row);
   }
   if (settingsTab === 'Прицел') updateCrossPreview();
-  if (settingsTab === 'Графика' && game) { const h = document.createElement('p'); h.className = 'hint'; h.textContent = 'Тени и пост-обработка применятся со следующего матча.'; body.appendChild(h); }
 }
 function updateCrossPreview() {
   const el = $('ch-prev'); if (!el) return;
@@ -420,15 +541,18 @@ function updateCrossPreview() {
   el.style.setProperty('--ch-color', c.color); el.style.setProperty('--ch-size', c.size + 'px');
   el.style.setProperty('--ch-thick', c.thick + 'px'); el.style.setProperty('--ch-gap', c.gap + 'px');
   el.style.setProperty('--ch-outline', c.outline ? '0 0 0 1px rgba(0,0,0,.8)' : 'none');
-  el.classList.toggle('dot', !!c.dot);
+  el.style.opacity = c.alpha ?? 1;
+  el.className = 'crosshair ' + (c.dot ? 'dot ' : '') + 'style-' + (c.style || 'cross');
 }
 let saveTimer = 0;
 function onSettingChanged(key) {
   clearTimeout(saveTimer); saveTimer = setTimeout(saveSettings, 200);
-  if (key.startsWith('crosshair') || key === 'showFps') { hud.applyCrosshair(); updateCrossPreview(); }
-  if (key === 'volume') sound.setVolume(settings.volume);
-  if (key === 'renderScale' || key === 'quality') { applyPixelRatio(); renderer.setSize(innerWidth, innerHeight, false); if (game) game.resize(innerWidth, innerHeight); }
+  hud.applyCrosshair(); updateCrossPreview();
+  if (key.startsWith('volume') || key.endsWith('Volume')) sound.setVolume();
+  if (['renderScale', 'quality', 'preset'].includes(key)) { applyPixelRatio(); renderer.setSize(innerWidth, innerHeight, false); if (game) game.resize(innerWidth, innerHeight); }
   if (key === 'fov' && game) game.curFov = settings.fov;
+  if (key === 'vmFov' && game) { game.vm.camera.fov = settings.vmFov; game.vm.camera.updateProjectionMatrix(); }
+  if (key === 'gyro') input.enableGyro(settings.gyro);
   if (key === 'controls' && game) { input.touch = isTouchMode(); input.buildTouchUI($('touch-ui')); $('hud').classList.toggle('touch', input.touch); }
 }
 
@@ -449,15 +573,11 @@ function renderLayoutEditor() {
     el.className = 'tbtn' + (name === 'joystick' ? ' joy' : '') + (leSel === name ? ' sel' : '');
     el.dataset.btn = name;
     Object.assign(el.style, { left: l.x + '%', top: l.y + '%', width: l.size + 'px', height: l.size + 'px', opacity: Math.max(0.35, l.opacity) });
-    el.innerHTML = (name === 'joystick' ? '<div class="knob"></div>' : BTN_ICONS[name]) + `<span class="lbl">${BUTTON_LABELS[name]}</span>`;
+    el.innerHTML = (name === 'joystick' ? '<div class="knob"></div>' : BTN_ICONS[name] || '') + `<span class="lbl">${BUTTON_LABELS[name]}</span>`;
     el.addEventListener('pointerdown', (e) => {
       e.preventDefault(); el.setPointerCapture(e.pointerId);
       selectLe(name);
-      const move = (ev) => {
-        l.x = Math.max(2, Math.min(98, ev.clientX / innerWidth * 100));
-        l.y = Math.max(2, Math.min(98, ev.clientY / innerHeight * 100));
-        el.style.left = l.x + '%'; el.style.top = l.y + '%';
-      };
+      const move = (ev) => { l.x = Math.max(2, Math.min(98, ev.clientX / innerWidth * 100)); l.y = Math.max(2, Math.min(98, ev.clientY / innerHeight * 100)); el.style.left = l.x + '%'; el.style.top = l.y + '%'; };
       const up = () => { el.removeEventListener('pointermove', move); el.removeEventListener('pointerup', up); };
       el.addEventListener('pointermove', move); el.addEventListener('pointerup', up);
     });
@@ -468,102 +588,138 @@ function selectLe(name) {
   leSel = name;
   document.querySelectorAll('#le-area .tbtn').forEach(e => e.classList.toggle('sel', e.dataset.btn === name));
   $('le-selected').textContent = BUTTON_LABELS[name];
-  $('le-size').value = leLayout[name].size;
-  $('le-opacity').value = leLayout[name].opacity;
+  $('le-size').value = leLayout[name].size; $('le-opacity').value = leLayout[name].opacity;
 }
 $('le-size').oninput = () => { if (!leSel) return; leLayout[leSel].size = +$('le-size').value; const el = document.querySelector(`#le-area [data-btn=${leSel}]`); el.style.width = el.style.height = leLayout[leSel].size + 'px'; };
 $('le-opacity').oninput = () => { if (!leSel) return; leLayout[leSel].opacity = +$('le-opacity').value; };
 $('le-firel').onchange = () => { leLayout.fireL.enabled = $('le-firel').checked; renderLayoutEditor(); };
 $('le-reset').onclick = () => { leLayout = JSON.parse(JSON.stringify(DEFAULT_LAYOUT)); leSel = null; $('le-firel').checked = true; renderLayoutEditor(); };
 $('le-cancel').onclick = () => $('layout-editor').classList.add('hidden');
-$('le-save').onclick = () => {
-  settings.layout = leLayout; saveSettings();
-  $('layout-editor').classList.add('hidden');
-  if (game) input.buildTouchUI($('touch-ui'));
-};
+$('le-save').onclick = () => { settings.layout = leLayout; saveSettings(); $('layout-editor').classList.add('hidden'); if (game) input.buildTouchUI($('touch-ui')); toast('Расстановка сохранена'); };
+
+// ---------- Меню закупки ----------
+let buyCat = 'rifle';
+const BUY_CATS = [['pistol', 'Пистолеты'], ['smg', 'ПП'], ['rifle', 'Винтовки'], ['sniper', 'Снайперские'], ['shotgun', 'Дробовики'], ['grenade', 'Гранаты'], ['gear', 'Снаряжение']];
+function isBuyOpen() { return !$('buy-menu').classList.contains('hidden'); }
+function toggleBuy(force) {
+  if (!game) return;
+  const open = force !== undefined ? force : !isBuyOpen();
+  if (open && !game.canBuy(game.player)) { if (game.mode === 'defuse') hud.center('ЗАКУПКА НЕДОСТУПНА', 1.2); return; }
+  $('buy-menu').classList.toggle('hidden', !open);
+  if (open) { input.exitLock(); renderBuy(); }
+  else if (!input.touch && game && !game.paused) input.requestLock();
+}
+function renderBuy() {
+  if (!game) return;
+  const p = game.player;
+  $('buy-money').textContent = '$' + p.money;
+  $('buy-time').textContent = game.buyLeft > 0 ? `Осталось ${Math.ceil(game.buyLeft)} с` : '';
+  $('buy-cats').innerHTML = BUY_CATS.map(([k, n]) => `<button data-k="${k}" class="${buyCat === k ? 'on' : ''}">${n}</button>`).join('');
+  $('buy-cats').querySelectorAll('button').forEach(b => b.onclick = () => { buyCat = b.dataset.k; renderBuy(); });
+  let items = [];
+  if (CAT_ORDER.includes(buyCat)) items = Object.values(WEAPONS).filter(w => w.cat === buyCat && (!w.team || w.team === p.team)).map(w => ({ id: w.id, name: w.name, price: w.price, icon: iconImg(w.id), sub: `${w.damage}${w.pellets ? '×' + w.pellets : ''} урона · ${w.rpm} в/м`, owned: p.inv.primary === w.id || p.inv.secondary === w.id }));
+  else if (buyCat === 'grenade') items = Object.values(GRENADES).map(g => ({ id: g.id, name: g.name, price: g.price, icon: iconImg(g.id), sub: `Максимум ${g.max} · есть ${p.inv.grenades[g.id]}`, owned: p.inv.grenades[g.id] >= g.max }));
+  else items = [
+    { id: 'kevlar', name: 'Бронежилет', price: 650, icon: '<div class="gi">🦺</div>', sub: 'Броня 100', owned: p.armor >= 100 },
+    { id: 'helmet', name: 'Бронежилет + шлем', price: p.armor >= 100 ? 350 : 1000, icon: '<div class="gi">⛑️</div>', sub: 'Защита головы', owned: p.helmet && p.armor >= 100 },
+    ...(p.team === 'A' ? [{ id: 'defuse', name: 'Набор сапёра', price: 400, icon: '<div class="gi">🧰</div>', sub: 'Разминирование за 5 с', owned: p.defuseKit }] : []),
+  ];
+  $('buy-items').innerHTML = items.map(it => `<button class="bitem ${p.money < it.price ? 'no' : ''} ${it.owned ? 'owned' : ''}" data-id="${it.id}">${it.icon}<b>${it.name}</b><small>${it.sub}</small><span class="price">$${it.price}</span></button>`).join('');
+  $('buy-items').querySelectorAll('.bitem').forEach(b => b.onclick = () => { if (game.buy(p, b.dataset.id)) renderBuy(); else { sound.click(); } });
+}
+$('buy-close').onclick = () => toggleBuy(false);
 
 // ---------- Матч ----------
-function startMatch() {
+async function startMatch() {
   sound.init();
   if (game) { game.dispose(); game = null; }
   $('menu').classList.add('hidden');
-  ['pause', 'end'].forEach(id => $(id).classList.add('hidden'));
-  $('load-text').textContent = 'Загрузка карты…';
+  ['pause', 'end', 'modal'].forEach(id => $(id).classList.add('hidden'));
+  $('load-text').textContent = 'Загрузка карты…'; $('load-fill').style.width = '60%';
   $('loading').classList.remove('hidden');
-  setTimeout(() => {
-    applyPixelRatio();
-    renderer.setSize(innerWidth, innerHeight, false);
-    renderer.shadowMap.enabled = settings.quality !== 'low';
-    input.touch = isTouchMode();
-    input.reset();
-    input.enabled = true;
-    $('hud').classList.toggle('touch', input.touch);
-    input.buildTouchUI($('touch-ui'));
-    hud.applyCrosshair();
-    game = new Game(renderer, input, hud, { ...settings.match }, { onEnd: onMatchEnd });
-    game.resize(innerWidth, innerHeight);
-    game.update(0.001); game.render(); // прогрев шейдеров
-    hud.show(true);
-    $('loading').classList.add('hidden');
-    hud.center(settings.match.mode === 'ffa' ? 'КАЖДЫЙ САМ ЗА СЕБЯ' : `ДО ${settings.match.killsToWin} УБИЙСТВ`, 2.2);
-    if (input.touch) { try { document.documentElement.requestFullscreen?.({ navigationUI: 'hide' }).catch(() => {}); } catch (e) { /* ignore */ } }
-    else input.requestLock();
-  }, 40);
+  await nextFrame();
+  const m = settings.match;
+  const hdri = await loadHDRI(MAPS[m.map].hdri);
+  applyPixelRatio();
+  renderer.setSize(innerWidth, innerHeight, false);
+  renderer.shadowMap.enabled = settings.shadows !== 'off';
+  input.touch = isTouchMode();
+  input.reset(); input.enabled = true;
+  input.enableGyro(settings.gyro);
+  $('hud').classList.toggle('touch', input.touch);
+  input.buildTouchUI($('touch-ui'));
+  hud.applyCrosshair();
+  game = new Game(renderer, input, hud, { ...m, mode: m.mode }, { onEnd: onMatchEnd, onBuyMenu: () => toggleBuy(), isBuyOpen }, hdri);
+  hud.setMoney(m.mode === 'defuse' ? game.player.money : null);
+  game.resize(innerWidth, innerHeight);
+  await texturesReady();
+  game.update(0.001); game.render();
+  $('load-fill').style.width = '100%';
+  hud.show(true);
+  $('loading').classList.add('hidden');
+  if (input.touch) { try { document.documentElement.requestFullscreen?.({ navigationUI: 'hide' }).catch(() => {}); } catch (e) { /* ignore */ } }
+  else input.requestLock();
 }
 $('start-btn').onclick = startMatch;
-$('quick-play').onclick = startMatch;
 
 function pauseGame() {
   if (!game || game.over || game.paused) return;
+  if (isBuyOpen()) { toggleBuy(false); return; }
   game.paused = true;
   input.reset();
   $('pause').classList.remove('hidden');
-  $('pause-hint').textContent = input.touch ? '' : 'Esc — пауза · Tab — счёт · R — перезарядка · 1/2/3 — оружие · Q — прошлое оружие · Ctrl/C — присесть · Shift — шаг';
+  $('pause-hint').textContent = input.touch ? '' : 'Esc — пауза · Tab — счёт · B — закупка · E — бомба';
 }
 input.onPause = pauseGame;
 function resumeGame() {
   if (!game) return;
-  $('pause').classList.add('hidden');
-  $('menu').classList.add('hidden');
+  $('pause').classList.add('hidden'); $('menu').classList.add('hidden');
   game.paused = false;
   input.reset(); input.enabled = true;
   hud.applyCrosshair();
   if (!input.touch) input.requestLock();
 }
 $('resume-btn').onclick = resumeGame;
-$('pause-settings').onclick = () => { $('pause').classList.add('hidden'); $('menu').classList.remove('hidden'); goto('settings'); };
+$('pause-settings').onclick = () => { $('pause').classList.add('hidden'); $('menu').classList.remove('hidden'); settingsTab = 'Графика'; screen = 'settings'; document.querySelectorAll('.screen').forEach(s => s.classList.toggle('active', s.id === 'screen-settings')); renderSettings(); };
 $('quit-btn').onclick = () => quitToMenu();
 
 function quitToMenu() {
   if (game) { game.dispose(); game = null; }
   input.enabled = false; input.reset(); input.exitLock();
   hud.show(false);
-  ['pause', 'end'].forEach(id => $(id).classList.add('hidden'));
+  ['pause', 'end', 'buy-menu'].forEach(id => $(id).classList.add('hidden'));
   $('menu').classList.remove('hidden');
   renderer.shadowMap.enabled = true;
-  goto('main');
+  goto('play');
 }
 
-function onMatchEnd({ win, draw, earned, player, game: g }) {
+function onMatchEnd({ win, draw, earned, xp, player, game: g }) {
   input.enabled = false; input.exitLock();
-  profile.credits += earned;
-  profile.xp = (profile.xp || 0) + earned * 5 + player.kills * 20;
+  toggleBuy(false);
+  const before = levelInfo(profile.xp || 0).level;
+  profile.credits += earned * 10;
+  profile.xp = (profile.xp || 0) + xp;
+  const after = levelInfo(profile.xp).level;
+  const lvlReward = after > before ? (after - before) : 0;
+  if (lvlReward) { profile.gold += 50 * lvlReward; profile.cases.field = (profile.cases.field || 0) + lvlReward; }
   const st = profile.stats;
-  st.kills += player.kills; st.deaths += player.deaths; st.headshots += player.headshots; st.matches++; if (win) st.wins++;
+  st.kills += player.kills; st.deaths += player.deaths; st.headshots += player.headshots; st.matches++; st.damage = (st.damage || 0) + player.damage; if (win) st.wins++;
+  profile.history = [...(profile.history || []), { win, draw, mode: g.mode, map: g.cfg.map, k: player.kills, d: player.deaths, score: g.mode === 'defuse' || g.mode === 'tdm' ? `${g.score[player.team]}:${g.score[player.team === 'A' ? 'B' : 'A']}` : '' }].slice(-30);
   saveProfile();
   $('end-title').textContent = draw ? 'Ничья' : win ? 'Победа' : 'Поражение';
   $('end-title').style.color = draw ? '#ddd' : win ? 'var(--ok)' : 'var(--danger)';
-  $('end-score').innerHTML = g.cfg.mode === 'ffa' ? `Место: ${[...g.actors].sort((a, b) => b.kills - a.kills).indexOf(player) + 1} из ${g.actors.length}`
-    : `<span style="color:var(--a)">${g.score.A}</span> : <span style="color:var(--b)">${g.score.B}</span>`;
+  $('end-score').innerHTML = g.mode === 'ffa' || g.mode === 'gungame' ? `Место: ${g.ranking().indexOf(player) + 1} из ${g.actors.length}`
+    : `<span style="color:var(--a)">${g.score[player.team]}</span> : <span style="color:var(--b)">${g.score[player.team === 'A' ? 'B' : 'A']}</span>`;
   const kd = (player.kills / Math.max(1, player.deaths)).toFixed(2);
-  $('end-stats').innerHTML = `<div class="end-stats"><div>Убийства<b>${player.kills}</b></div><div>Смерти<b>${player.deaths}</b></div><div>K/D<b>${kd}</b></div><div>Хедшоты<b>${player.headshots}</b></div></div>
-    <div class="reward">Награда: <span style="color:var(--accent2)">◆ ${earned}</span> · <span style="color:var(--muted)">+${earned * 5 + player.kills * 20} опыта</span></div>`;
+  $('end-stats').innerHTML = `<div class="end-stats"><div>Убийства<b>${player.kills}</b></div><div>Ассисты<b>${player.assists}</b></div><div>Смерти<b>${player.deaths}</b></div><div>K/D<b>${kd}</b></div><div>Урон<b>${Math.round(player.damage)}</b></div></div>
+    <div class="reward">Награда: <span style="color:var(--cr)">◈ ${earned * 10}</span> · <span style="color:var(--accent2)">+${xp} опыта</span>${lvlReward ? ` · <span style="color:var(--gold)">Новый уровень! +● ${50 * lvlReward} и кейс</span>` : ''}</div>`;
   $('end').classList.remove('hidden');
+  renderTopbar();
 }
 $('end-again').onclick = startMatch;
 $('end-menu').onclick = quitToMenu;
 
-// ---------- Цикл с лимитом FPS ----------
+// ---------- Цикл ----------
 let last = performance.now(), lastFrame = 0, fpsAcc = 0, fpsN = 0, fps = 0;
 const hzSamples = [];
 function frame(now) {
@@ -583,33 +739,32 @@ function frame(now) {
     game.update(dt);
     game.render();
     hud.update(dt, fps);
-  } else renderLobby(dt);
+    if (isBuyOpen()) { if (!game.canBuy(game.player)) toggleBuy(false); else if ((now | 0) % 10 === 0) { $('buy-money').textContent = '$' + game.player.money; $('buy-time').textContent = `Осталось ${Math.ceil(game.buyLeft)} с`; } }
+  } else if (lobby.char) renderLobby(dt);
 }
-
-function onResize() {
-  renderer.setSize(innerWidth, innerHeight, false);
-  layoutLobby();
-  if (game) game.resize(innerWidth, innerHeight);
-}
-window.addEventListener('resize', onResize);
+window.addEventListener('resize', () => { renderer.setSize(innerWidth, innerHeight, false); if (game) game.resize(innerWidth, innerHeight); });
 
 // ---------- Старт ----------
 async function boot() {
-  const lt = $('load-text');
-  lt.textContent = 'Генерация текстур…'; await nextFrame();
+  const lt = $('load-text'), lf = $('load-fill');
+  lt.textContent = 'Загрузка моделей и звуков…';
+  await loadCore((p) => { lf.style.width = (p * 70) + '%'; });
+  lt.textContent = 'Подготовка оружия…'; await nextFrame();
   buildWeaponIcons(renderer);
-  buildLobby();
-  layoutLobby();
+  lt.textContent = 'Подготовка лобби…'; lf.style.width = '78%';
+  await buildLobby();
   for (const id of Object.keys(MAPS)) {
-    lt.textContent = `Подготовка карты «${MAPS[id].name}»…`; await nextFrame();
-    try { renderMapThumb(id); } catch (e) { console.error(e); }
+    lt.textContent = `Карта «${MAPS[id].name}»…`; lf.style.width = (id === 'oasis' ? 85 : 95) + '%';
+    await nextFrame();
+    try { await renderMapThumb(id); } catch (e) { console.error(e); }
   }
-  setLobbyCharacter();
-  setLobbyMode('char');
-  renderProfile(); renderSummary();
+  lf.style.width = '100%';
+  if (settings.match.side && settings.match.side !== 'auto') setLobbyTeam(settings.match.side);
+  goto('play');
   $('loading').classList.add('hidden');
+  if (dailyAvailable()) setTimeout(() => toast('Доступна ежедневная награда — загляните в магазин'), 1200);
   requestAnimationFrame(frame);
 }
-boot();
+boot().catch(e => { console.error(e); $('load-text').textContent = 'Ошибка загрузки: ' + e.message; });
 
-window.__maxi = { get game() { return game; }, settings, profile };
+window.__maxi = { get game() { return game; }, settings, profile, A };

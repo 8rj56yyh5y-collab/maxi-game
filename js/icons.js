@@ -1,6 +1,7 @@
 // Иконки оружия (силуэты), отрендеренные из 3D-моделей.
 import * as THREE from 'three';
 import { buildWeaponModel } from './weapons.js';
+import { WEAPONS, KNIVES } from './data.js';
 
 export const ICONS = {};
 
@@ -13,7 +14,7 @@ export function buildWeaponIcons(renderer) {
   const buf = new Uint8Array(W * H * 4);
   const prevTM = renderer.toneMapping;
   renderer.toneMapping = THREE.NoToneMapping;
-  for (const id of ['ar', 'smg', 'sniper', 'shotgun', 'pistol', 'knife']) {
+  for (const id of [...Object.keys(WEAPONS), ...Object.keys(KNIVES), 'he', 'flash', 'smoke']) {
     scene.clear();
     const m = buildWeaponModel(id, null);
     scene.add(m);

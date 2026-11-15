@@ -1,54 +1,28 @@
-// Скины, кейсы и профиль игрока (кредиты, инвентарь). Всё хранится локально.
-const KEY = 'maxi_profile_v1';
+// Профиль игрока: валюты, инвентарь, снаряжение, кейсы, статистика. Хранится локально.
+import { SKINS, CASES, RARITY, KNIVES, WEAPONS, STORE } from './data.js';
+export { SKINS, CASES, RARITY };
 
-export const RARITY = {
-  common:    { name: 'Обычный',      color: '#b0c3d9', sell: 15 },
-  rare:      { name: 'Редкий',       color: '#4b69ff', sell: 40 },
-  epic:      { name: 'Эпический',    color: '#8847ff', sell: 90 },
-  legendary: { name: 'Легендарный',  color: '#d32ce6', sell: 200 },
-  mythic:    { name: 'Мифический',   color: '#ffb400', sell: 500 },
-};
+const KEY = 'maxi_profile_v2';
 
-// Шаблоны раскрасок — применяются к каждому оружию.
-const STYLES = [
-  { key: 'sand',    name: 'Песчаная буря',  rarity: 'common',    pattern: 'camo',     colors: ['#c9a66b', '#9c7a45', '#e0c999'] },
-  { key: 'forest',  name: 'Лесник',         rarity: 'common',    pattern: 'camo',     colors: ['#4b5a32', '#2e3a1f', '#7a8450'] },
-  { key: 'urban',   name: 'Городской',      rarity: 'common',    pattern: 'camo',     colors: ['#8a8f96', '#4b4f55', '#c2c6cc'] },
-  { key: 'arctic',  name: 'Арктика',        rarity: 'rare',      pattern: 'camo',     colors: ['#e8f0f5', '#9fb6c6', '#5f7a8c'] },
-  { key: 'carbon',  name: 'Карбон',         rarity: 'rare',      pattern: 'carbon',   colors: ['#1a1a1a', '#333333', '#ff5a00'] },
-  { key: 'tiger',   name: 'Тигр',           rarity: 'rare',      pattern: 'tiger',    colors: ['#e08a1e', '#1a1208'] },
-  { key: 'toxic',   name: 'Токсин',         rarity: 'epic',      pattern: 'hex',      colors: ['#17201a', '#5cff3a', '#2c8a1a'], glow: '#2cff00' },
-  { key: 'sunset',  name: 'Закат',          rarity: 'epic',      pattern: 'gradient', colors: ['#ff4e50', '#f9d423', '#6a0dad'] },
-  { key: 'neon',    name: 'Неоновый город', rarity: 'legendary', pattern: 'neon',     colors: ['#0b0b1a', '#00f0ff', '#ff00c8'], glow: '#00c8ff' },
-  { key: 'galaxy',  name: 'Галактика',      rarity: 'legendary', pattern: 'galaxy',   colors: ['#05031a', '#b44cff', '#1b3cff'] },
-  { key: 'dragon',  name: 'Золотой дракон', rarity: 'mythic',    pattern: 'dragon',   colors: ['#ffd76a', '#8a5a00', '#c98a00'], glow: '#ffaa00' },
-  { key: 'lava',    name: 'Лава',           rarity: 'mythic',    pattern: 'neon',     colors: ['#1a0500', '#ff4a00', '#ffcc00'], glow: '#ff3300' },
-];
-
-export const SKIN_WEAPONS = ['ar', 'smg', 'sniper', 'shotgun', 'pistol', 'knife'];
-
-export const SKINS = {};
-for (const w of SKIN_WEAPONS) for (const st of STYLES) {
-  const id = `${w}_${st.key}`;
-  SKINS[id] = { id, weapon: w, name: st.name, rarity: st.rarity, pattern: st.pattern, colors: st.colors, glow: st.glow };
+function defaults() {
+  return {
+    credits: 2000, gold: 300, xp: 0,
+    owned: [],                 // id скинов
+    equipped: {},              // weaponId → skinId
+    knife: 'knife',            // выбранный нож
+    cases: { field: 1, elite: 1 },
+    loadout: { A: { primary: 'ar4', secondary: 'p9' }, B: { primary: 'ak', secondary: 'p18' } },
+    stats: { kills: 0, deaths: 0, headshots: 0, matches: 0, wins: 0, damage: 0, roundsWon: 0, plants: 0, defuses: 0, perWeapon: {} },
+    purchases: {}, lastDaily: 0, streak: 0, history: [],
+  };
 }
 
-export const CASES = [
-  { id: 'basic', name: 'Полевой кейс', price: 100, color: '#5b7c99',
-    weights: { common: 62, rare: 26, epic: 9, legendary: 2.6, mythic: 0.4 } },
-  { id: 'elite', name: 'Элитный кейс', price: 300, color: '#8847ff',
-    weights: { common: 25, rare: 38, epic: 24, legendary: 10, mythic: 3 } },
-  { id: 'knife', name: 'Кейс «Клинок»', price: 450, color: '#ffb400', weapon: 'knife',
-    weights: { common: 20, rare: 35, epic: 27, legendary: 13, mythic: 5 } },
-];
-
 function load() {
-  const def = { credits: 600, owned: [], equipped: {}, stats: { kills: 0, deaths: 0, matches: 0, wins: 0, headshots: 0 } };
   try {
     const raw = localStorage.getItem(KEY);
-    if (raw) return { ...def, ...JSON.parse(raw) };
+    if (raw) { const d = defaults(), p = JSON.parse(raw); return { ...d, ...p, stats: { ...d.stats, ...(p.stats || {}) }, loadout: { ...d.loadout, ...(p.loadout || {}) } }; }
   } catch (e) { /* ignore */ }
-  return def;
+  return defaults();
 }
 
 export const profile = load();
@@ -63,32 +37,102 @@ export function equippedSkin(weaponId) {
 }
 
 export function equip(weaponId, skinId) {
-  if (skinId === null) delete profile.equipped[weaponId];
+  if (!skinId) delete profile.equipped[weaponId];
   else profile.equipped[weaponId] = skinId;
   saveProfile();
 }
 
-export function rollCase(caseDef) {
-  const pool = Object.values(SKINS).filter(s => !caseDef.weapon || s.weapon === caseDef.weapon);
-  const total = Object.values(caseDef.weights).reduce((a, b) => a + b, 0);
+// Ножи: «Боевой нож» есть всегда, остальные — если есть хотя бы один скин на них
+export function ownedKnives() {
+  const set = new Set(['knife']);
+  for (const id of profile.owned) { const s = SKINS[id]; if (s && KNIVES[s.weapon]) set.add(s.weapon); }
+  return [...set];
+}
+
+export function caseContents(c) {
+  return Object.values(SKINS).filter(s => c.filter(s) && c.weights[s.rarity] !== undefined);
+}
+
+export function rollCase(c) {
+  if (c.knifeChance && Math.random() < c.knifeChance) {
+    const knives = Object.values(SKINS).filter(s => KNIVES[s.weapon] && s.weapon !== 'knife');
+    return knives[Math.floor(Math.random() * knives.length)];
+  }
+  const pool = caseContents(c);
+  const total = Object.values(c.weights).reduce((a, b) => a + b, 0);
   let x = Math.random() * total, rarity = 'common';
-  for (const [r, w] of Object.entries(caseDef.weights)) { if ((x -= w) <= 0) { rarity = r; break; } }
-  const list = pool.filter(s => s.rarity === rarity);
+  for (const [r, w] of Object.entries(c.weights)) { if ((x -= w) <= 0) { rarity = r; break; } }
+  let list = pool.filter(s => s.rarity === rarity);
+  if (!list.length) list = pool;
   return list[Math.floor(Math.random() * list.length)];
 }
 
-// Случайный предмет для «ленты» рулетки (только визуально).
-export function randomFiller(caseDef) {
-  return rollCase(caseDef);
+export function casePrice(c) {
+  return c.currency === 'gold' ? { amount: c.price, cur: 'gold' } : { amount: c.creditPrice, cur: 'credits' };
 }
 
-export function openCase(caseDef) {
-  if (profile.credits < caseDef.price) return null;
-  profile.credits -= caseDef.price;
-  const skin = rollCase(caseDef);
+// Купить кейс (в инвентарь)
+export function buyCase(c) {
+  const p = casePrice(c);
+  if (profile[p.cur] < p.amount) return false;
+  profile[p.cur] -= p.amount;
+  profile.cases[c.id] = (profile.cases[c.id] || 0) + 1;
+  saveProfile();
+  return true;
+}
+
+// Открыть кейс из инвентаря
+export function openCase(c) {
+  if (!profile.cases[c.id]) return null;
+  profile.cases[c.id]--;
+  const skin = rollCase(c);
   const duplicate = profile.owned.includes(skin.id);
-  if (duplicate) profile.credits += RARITY[skin.rarity].sell;
+  if (duplicate) profile.credits += RARITY[skin.rarity].sell * 10;
   else profile.owned.push(skin.id);
   saveProfile();
   return { skin, duplicate };
 }
+
+export function sellSkin(id) {
+  const i = profile.owned.indexOf(id);
+  if (i < 0) return 0;
+  const s = SKINS[id];
+  profile.owned.splice(i, 1);
+  for (const [w, sid] of Object.entries(profile.equipped)) if (sid === id) delete profile.equipped[w];
+  if (KNIVES[s.weapon] && profile.knife === s.weapon && !ownedKnives().includes(s.weapon)) profile.knife = 'knife';
+  const v = RARITY[s.rarity].sell * 10;
+  profile.credits += v;
+  saveProfile();
+  return v;
+}
+
+// Магазин (пока всё бесплатно — 0 ₴)
+export function buyStoreItem(item) {
+  if (item.once && profile.purchases[item.id]) return false;
+  profile.gold += item.gold || 0;
+  profile.credits += item.credits || 0;
+  for (const [cid, n] of Object.entries(item.cases || {})) profile.cases[cid] = (profile.cases[cid] || 0) + n;
+  profile.purchases[item.id] = (profile.purchases[item.id] || 0) + 1;
+  saveProfile();
+  return true;
+}
+
+// Ежедневная награда
+export function dailyAvailable() { return Date.now() - profile.lastDaily > 20 * 3600 * 1000; }
+export function claimDaily() {
+  if (!dailyAvailable()) return null;
+  profile.streak = Date.now() - profile.lastDaily < 48 * 3600 * 1000 ? Math.min(7, profile.streak + 1) : 1;
+  profile.lastDaily = Date.now();
+  const credits = 300 + profile.streak * 100, gold = profile.streak >= 7 ? 100 : 20;
+  profile.credits += credits; profile.gold += gold;
+  if (profile.streak % 3 === 0) profile.cases.field = (profile.cases.field || 0) + 1;
+  saveProfile();
+  return { credits, gold, streak: profile.streak };
+}
+
+export function weaponAvailableFor(team, id) {
+  const w = WEAPONS[id];
+  return w && (!w.team || w.team === team);
+}
+
+export { STORE };

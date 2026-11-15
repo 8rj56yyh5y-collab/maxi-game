@@ -9,6 +9,9 @@ export const BTN_ICONS = {
   crouch: '<svg viewBox="0 0 24 24"><path d="M12 20l7-8h-4V4H9v8H5z" fill="currentColor"/></svg>',
   reload: '<svg viewBox="0 0 24 24"><path d="M19 12a7 7 0 1 1-2-4.9M19 4v4h-4" fill="none" stroke="currentColor" stroke-width="2.4"/></svg>',
   weapon: '<svg viewBox="0 0 24 24"><path d="M3 10h14l2-2h2v4h-3l-1 1h-4l-1 5H9l1-5H3z" fill="currentColor"/></svg>',
+  grenade: '<svg viewBox="0 0 24 24"><circle cx="12" cy="14" r="6" fill="currentColor"/><path d="M10 7h4v2h-4zM14 6l4-2" stroke="currentColor" stroke-width="2"/></svg>',
+  use: '<svg viewBox="0 0 24 24"><path d="M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18zm-1 5h2v5h-2zm0 7h2v2h-2z" fill="currentColor"/></svg>',
+  buy: '<svg viewBox="0 0 24 24"><path d="M4 5h2l2 10h10l2-7H7" fill="none" stroke="currentColor" stroke-width="2"/><circle cx="9" cy="19" r="1.6" fill="currentColor"/><circle cx="17" cy="19" r="1.6" fill="currentColor"/></svg>',
   score: '<svg viewBox="0 0 24 24"><path d="M4 5h16M4 12h16M4 19h16" stroke="currentColor" stroke-width="2.4"/></svg>',
   pause: '<svg viewBox="0 0 24 24"><path d="M7 5h3v14H7zM14 5h3v14h-3z" fill="currentColor"/></svg>',
 };
@@ -20,7 +23,7 @@ export class Input {
     this.pressed = new Set();
     this.lookX = 0; this.lookY = 0;
     this.moveX = 0; this.moveZ = 0;
-    this.mouseFire = false; this.touchFire = 0;
+    this.mouseFire = false; this.touchFire = 0; this.touchUse = 0;
     this.aim = false;
     this.crouchToggle = false;
     this.locked = false;
@@ -34,6 +37,7 @@ export class Input {
 
   get fire() { return this.mouseFire || this.touchFire > 0; }
   get crouch() { return this.keys.has('ControlLeft') || this.keys.has('KeyC') || this.crouchToggle; }
+  get useHeld() { return this.keys.has('KeyE') || this.touchUse > 0; }
   get walk() { return this.keys.has('ShiftLeft'); }
   get scoreboard() { return this.keys.has('Tab') || this.showScore; }
   was(name) { return this.pressed.has(name); }
@@ -41,7 +45,7 @@ export class Input {
   endFrame() { this.pressed.clear(); this.lookX = 0; this.lookY = 0; }
 
   reset() {
-    this.keys.clear(); this.pressed.clear(); this.mouseFire = false; this.touchFire = 0;
+    this.keys.clear(); this.pressed.clear(); this.mouseFire = false; this.touchFire = 0; this.touchUse = 0; this.touchUse = 0;
     this.aim = false; this.crouchToggle = false; this.moveX = this.moveZ = 0; this.touches.clear();
     this.showScore = false;
     if (this.knob) this._resetJoystick();
@@ -53,7 +57,7 @@ export class Input {
       if (e.code === 'Tab') e.preventDefault();
       if (e.repeat) return;
       this.keys.add(e.code);
-      const map = { Space: 'jump', KeyR: 'reload', Digit1: 'slot0', Digit2: 'slot1', Digit3: 'slot2', KeyQ: 'lastWeapon', KeyF: 'inspect' };
+      const map = { Space: 'jump', KeyR: 'reload', Digit1: 'slot0', Digit2: 'slot1', Digit3: 'slot2', Digit4: 'slot3', Digit5: 'slot4', KeyQ: 'lastWeapon', KeyF: 'inspect', KeyB: 'buy', KeyG: 'drop' };
       if (map[e.code]) this.pressed.add(map[e.code]);
     });
     window.addEventListener('keyup', (e) => { this.keys.delete(e.code); });
@@ -84,6 +88,31 @@ export class Input {
       this.lockTime = performance.now();
       if (was && !this.locked && this.enabled && !this.touch && this.onPause) this.onPause();
     });
+  }
+
+  // Гироскоп (телефоны): поворот устройства добавляется к обзору
+  enableGyro(on) {
+    this.gyroOn = on;
+    if (!on || this._gyroBound) return;
+    const start = () => {
+      this._gyroBound = true;
+      window.addEventListener('deviceorientation', (e) => {
+        if (!this.enabled || !this.gyroOn || e.beta === null) return;
+        const landscape = Math.abs(window.orientation || (screen.orientation && screen.orientation.angle) || 0) === 90;
+        const x = landscape ? e.beta : e.gamma, y = landscape ? e.gamma : e.beta;
+        if (this._gPrev) {
+          let dx = x - this._gPrev.x, dy = y - this._gPrev.y;
+          if (Math.abs(dx) > 20 || Math.abs(dy) > 20) { dx = 0; dy = 0; }
+          if (settings.gyroAimOnly && !this.aimingNow) { dx = 0; dy = 0; }
+          const k = 0.017 * settings.gyroSens;
+          const sgn = (window.orientation || (screen.orientation && screen.orientation.angle) || 0) < 0 ? -1 : 1;
+          this.lookX += dx * k * sgn; this.lookY += -dy * k * sgn * (settings.invertY ? -1 : 1);
+        }
+        this._gPrev = { x, y };
+      });
+    };
+    if (typeof DeviceOrientationEvent !== 'undefined' && DeviceOrientationEvent.requestPermission) DeviceOrientationEvent.requestPermission().then(r => r === 'granted' && start()).catch(() => {});
+    else start();
   }
 
   requestLock() {
@@ -155,6 +184,9 @@ export class Input {
           if (btn === 'crouch') { this.crouchToggle = !this.crouchToggle; btnEl.classList.toggle('on', this.crouchToggle); }
           if (btn === 'reload') this.pressed.add('reload');
           if (btn === 'weapon') this.pressed.add('nextWeapon');
+          if (btn === 'grenade') this.pressed.add('grenade');
+          if (btn === 'buy') this.pressed.add('buy');
+          if (btn === 'use') { this.touchUse++; info.useHold = true; }
           if (btn === 'score') this.showScore = !this.showScore;
           if (btn === 'pause' && this.onPause) this.onPause();
         }
@@ -177,7 +209,7 @@ export class Input {
       if (!info) continue;
       const dx = t.clientX - info.x, dy = t.clientY - info.y;
       if (info.kind === 'look' || info.kind === 'fire') {
-        const k = 0.0042 * settings.touchSens;
+        const k = 0.0042 * settings.touchSens * (this.aimMult || 1);
         this.lookX += dx * k;
         this.lookY += dy * k * (settings.invertY ? -1 : 1);
         info.x = t.clientX; info.y = t.clientY;
@@ -203,6 +235,7 @@ export class Input {
       if (info.el) info.el.classList.remove('down');
       if (info.kind === 'fire') this.touchFire = Math.max(0, this.touchFire - 1);
       if (info.aimHold) this.pressed.add('aim');
+      if (info.useHold) this.touchUse = Math.max(0, this.touchUse - 1);
       if (info.kind === 'joy') { this.joyActive = false; this._resetJoystick(); }
       this.touches.delete(t.identifier);
     }

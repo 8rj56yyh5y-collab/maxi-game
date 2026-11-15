@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
-<meta name="theme-color" content="#07090c">
+<meta name="theme-color" content="#0b121b">
 <title>MAXI STRIKE</title>
 <link rel="manifest" href="manifest.json">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -16,131 +16,151 @@
 <body>
 <canvas id="game"></canvas>
 
-<!-- ============ HUD ============ -->
+<!-- ================= HUD ================= -->
 <div id="hud" class="hidden">
   <div id="crosshair"><i class="t"></i><i class="b"></i><i class="l"></i><i class="r"></i><i class="d"></i></div>
   <div id="hitmarker"></div>
   <div id="scope" class="hidden"><div class="scope-lines"></div></div>
   <div id="damage-flash"></div>
+  <div id="flash-overlay"></div>
   <div id="dmg-indicators"></div>
+  <div id="dmg-numbers"></div>
   <div id="topbar">
-    <div class="team-side a"><div class="pips" id="pips-a"></div><div class="score" id="score-a">0</div></div>
-    <div class="mid"><div id="timer">8:00</div><div id="goal"></div></div>
-    <div class="team-side b"><div class="score" id="score-b">0</div><div class="pips" id="pips-b"></div></div>
+    <div class="team-side my"><div class="pips" id="pips-a"></div><div class="tscore"><small id="label-a"></small><b id="score-a">0</b></div></div>
+    <div class="mid"><div id="bomb-icon"></div><div id="timer">0:00</div><div id="goal"></div></div>
+    <div class="team-side their"><div class="tscore"><small id="label-b"></small><b id="score-b">0</b></div><div class="pips" id="pips-b"></div></div>
   </div>
-  <div id="radar-wrap"><canvas id="minimap" width="300" height="300"></canvas><div id="radar-map-name"></div></div>
+  <div id="radar-wrap"><canvas id="minimap" width="300" height="300"></canvas><div id="radar-map-name"></div>
+    <div class="money-box"><span id="money">$800</span><span id="money-delta"></span></div>
+  </div>
   <div id="killfeed"></div>
+  <div id="banner"><div id="banner-title"></div><div id="banner-sub"></div></div>
+  <div id="buy-hint"></div>
+  <div id="use-hint"></div>
+  <div id="progress"><div id="progress-label"></div><div class="pbar"><i id="progress-fill"></i></div></div>
+  <div id="spectate"></div>
   <div id="vitals">
     <div class="vital hp"><svg viewBox="0 0 24 24"><path d="M9 3h6v6h6v6h-6v6H9v-6H3V9h6z" fill="currentColor"/></svg><span id="hp">100</span><div class="bar"><i id="hp-fill"></i></div></div>
-    <div class="vital ar"><svg viewBox="0 0 24 24"><path d="M12 2l8 3v6c0 5-3.4 9.4-8 11-4.6-1.6-8-6-8-11V5z" fill="currentColor"/></svg><span id="armor">100</span><div class="bar"><i id="ar-fill"></i></div></div>
+    <div class="vital ar"><svg viewBox="0 0 24 24"><path d="M12 2l8 3v6c0 5-3.4 9.4-8 11-4.6-1.6-8-6-8-11V5z" fill="currentColor"/></svg><span id="armor">0</span><div class="bar"><i id="ar-fill"></i></div>
+      <svg id="helmet" class="helm" viewBox="0 0 24 24"><path d="M3 15a9 8 0 0 1 18 0v2H3z" fill="currentColor"/></svg></div>
     <div id="protect">Защита при возрождении</div>
   </div>
   <div id="weapon-panel">
     <div id="weapon-slots"></div>
-    <div class="ammo-row"><div id="ammo"><span id="ammo-mag">30</span><span id="ammo-res">/ 90</span></div></div>
+    <div class="ammo-row"><div id="weapon-icon"></div><div id="ammo"><span id="ammo-mag">30</span><span id="ammo-res">/ 90</span></div></div>
     <div id="weapon-name"></div>
+    <div id="grenades"></div>
     <div id="reload-bar"><div id="reload-fill"></div></div>
   </div>
   <div id="center-msg"></div>
-  <div id="death-screen" class="hidden"><div class="killed-by"><small>ВАС УБИЛ</small><b id="killer-name"></b><span id="killer-weapon"></span></div><div id="respawn-timer"></div></div>
+  <div id="death-screen" class="hidden"><div class="killed-by"><small>ВАС УБИЛ</small><b id="killer-name"></b><span id="killer-weapon"></span><em id="killer-hp"></em></div><div id="respawn-timer"></div></div>
   <div id="scoreboard" class="hidden"></div>
   <div id="fps"></div>
   <div id="touch-ui"></div>
 </div>
 
-<!-- ============ МЕНЮ ============ -->
+<!-- ================= Меню закупки ================= -->
+<div id="buy-menu" class="hidden">
+  <div class="buy-panel">
+    <div class="buy-head"><h2>Закупка</h2><div class="buy-money" id="buy-money">$0</div><div class="buy-time" id="buy-time"></div><button class="close" id="buy-close">✕</button></div>
+    <div class="buy-body">
+      <div class="buy-cats" id="buy-cats"></div>
+      <div class="buy-items" id="buy-items"></div>
+    </div>
+  </div>
+</div>
+
+<!-- ================= МЕНЮ ================= -->
 <div id="menu">
-  <header class="nav">
-    <div class="logo">MAXI<span>STRIKE</span></div>
+  <header class="topbar">
+    <div class="tb-profile" data-goto="profile">
+      <div class="avatar" id="avatar">M</div>
+      <div class="tb-name"><b id="nick">Игрок</b><small><span id="lvl">1</span> · <span id="rank">Новобранец</span></small><div class="xp"><i id="xp-fill"></i></div></div>
+    </div>
     <nav id="nav">
-      <button data-goto="main" class="on">Главная</button>
-      <button data-goto="arsenal">Арсенал</button>
-      <button data-goto="cases">Кейсы</button>
-      <button data-goto="settings">Настройки</button>
+      <button data-goto="play" class="on"><span>Играть</span></button>
+      <button data-goto="loadout"><span>Снаряжение</span></button>
+      <button data-goto="inventory"><span>Инвентарь</span></button>
+      <button data-goto="cases"><span>Кейсы</span></button>
+      <button data-goto="store"><span>Магазин</span></button>
     </nav>
-    <div class="nav-right">
-      <div class="credits"><span class="coin">◆</span><span id="credits">0</span></div>
-      <div class="player-chip"><div class="avatar">M</div><div><b>Игрок</b><small id="lvl-text">Уровень 1</small><div class="xp"><i id="xp-fill"></i></div></div></div>
+    <div class="tb-right">
+      <div class="cur cr" data-goto="store"><i>◈</i><span id="credits">0</span><b>+</b></div>
+      <div class="cur gd" data-goto="store"><i>●</i><span id="gold">0</span><b>+</b></div>
+      <button class="icon-btn" data-goto="settings" title="Настройки"><svg viewBox="0 0 24 24"><path d="M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8zm9 4l-2.1-.6a7 7 0 0 0-.7-1.7l1.1-1.9-1.6-1.6-1.9 1.1a7 7 0 0 0-1.7-.7L13.5 3h-3l-.6 2.1a7 7 0 0 0-1.7.7L6.3 4.7 4.7 6.3l1.1 1.9a7 7 0 0 0-.7 1.7L3 10.5v3l2.1.6c.2.6.4 1.2.7 1.7l-1.1 1.9 1.6 1.6 1.9-1.1c.5.3 1.1.5 1.7.7l.6 2.1h3l.6-2.1c.6-.2 1.2-.4 1.7-.7l1.9 1.1 1.6-1.6-1.1-1.9c.3-.5.5-1.1.7-1.7l2.1-.6z" fill="currentColor"/></svg></button>
     </div>
   </header>
 
-  <!-- Лобби -->
-  <section class="screen active" id="screen-main">
-    <div class="lobby-left">
-      <div class="card stats-card">
-        <div class="card-title">Статистика</div>
-        <div class="stat-grid" id="profile-card"></div>
-      </div>
-      <div class="card tips">
-        <div class="card-title">Управление (ПК)</div>
-        <div class="keys">
-          <span><kbd>WASD</kbd>движение</span><span><kbd>ЛКМ</kbd>огонь</span><span><kbd>ПКМ</kbd>прицел</span>
-          <span><kbd>R</kbd>перезарядка</span><span><kbd>Пробел</kbd>прыжок</span><span><kbd>Ctrl</kbd>присед</span>
-          <span><kbd>1-3</kbd>оружие</span><span><kbd>Tab</kbd>счёт</span><span><kbd>Esc</kbd>пауза</span>
-        </div>
-      </div>
-    </div>
-    <div class="lobby-play">
-      <div class="match-summary" id="match-summary"></div>
-      <div class="play-row">
-        <button class="ghost" data-goto="play">Настроить матч</button>
-        <button class="play-btn" id="quick-play">В БОЙ</button>
-      </div>
+  <!-- Играть -->
+  <section class="screen active" id="screen-play">
+    <div class="modes" id="modes"></div>
+    <div class="play-right">
+      <div class="card match-card" id="match-card"></div>
+      <button class="play-btn" id="start-btn"><span>ИГРАТЬ</span><small id="start-sub"></small></button>
     </div>
   </section>
 
-  <!-- Настройка матча -->
-  <section class="screen" id="screen-play">
-    <div class="panel wide">
-      <div class="panel-head"><h2>Бой с ботами</h2><button class="close" data-goto="main">✕</button></div>
-      <div class="maps" id="map-cards"></div>
-      <div class="opts">
-        <div class="row"><label>Режим</label><div class="seg" data-opt="mode"></div></div>
-        <div class="row"><label id="per-team-label">Игроков в команде</label><div class="seg" data-opt="perTeam"></div></div>
-        <div class="row"><label>Сложность ботов</label><div class="seg" data-opt="difficulty"></div></div>
-        <div class="row"><label>Основное оружие</label><div class="seg weapons" data-opt="primary"></div></div>
-        <div class="row"><label>Убийств до победы</label><div class="seg" data-opt="killsToWin"></div></div>
-        <div class="row"><label>Время матча</label><div class="seg" data-opt="minutes"></div></div>
-      </div>
-      <button class="play-btn wide" id="start-btn">В БОЙ</button>
+  <!-- Снаряжение -->
+  <section class="screen" id="screen-loadout">
+    <div class="panel lo-panel">
+      <div class="panel-head"><h2>Снаряжение</h2><div class="seg" id="lo-team"></div></div>
+      <p class="hint">Оружие для режимов «Командный бой» и «Каждый сам за себя». В «Закладке бомбы» оружие покупается в начале раунда.</p>
+      <div class="lo-slots" id="lo-slots"></div>
+      <div class="lo-list" id="lo-list"></div>
     </div>
+    <div class="lo-info" id="lo-info"></div>
   </section>
 
-  <!-- Арсенал -->
-  <section class="screen" id="screen-arsenal">
-    <div class="panel side">
-      <div class="panel-head"><h2>Арсенал</h2></div>
-      <div class="tabs weapon-tabs" id="arsenal-tabs"></div>
-      <div class="skin-grid" id="skin-grid"></div>
+  <!-- Инвентарь -->
+  <section class="screen" id="screen-inventory">
+    <div class="panel inv-panel">
+      <div class="panel-head"><h2>Инвентарь</h2><div class="inv-count" id="inv-count"></div></div>
+      <div class="filters"><div class="seg" id="inv-filter"></div><div class="seg" id="inv-rarity"></div></div>
+      <div class="skin-grid" id="inv-grid"></div>
     </div>
-    <div class="skin-info" id="skin-info"></div>
+    <div class="lo-info" id="inv-info"></div>
   </section>
 
   <!-- Кейсы -->
   <section class="screen" id="screen-cases">
     <div class="panel wide">
       <div class="panel-head"><h2>Кейсы</h2></div>
-      <p class="hint">Кредиты ◆ дают за убийства, хедшоты и победы. Повторный скин автоматически продаётся.</p>
       <div class="case-list" id="case-list"></div>
     </div>
   </section>
 
+  <!-- Магазин -->
+  <section class="screen" id="screen-store">
+    <div class="panel wide">
+      <div class="panel-head"><h2>Магазин</h2><span class="hint">Покупки временно бесплатные — 0 ₴</span></div>
+      <div class="daily" id="daily"></div>
+      <div class="store-grid" id="store-grid"></div>
+    </div>
+  </section>
+
+  <!-- Профиль -->
+  <section class="screen" id="screen-profile">
+    <div class="panel wide" id="profile-panel"></div>
+  </section>
+
   <!-- Настройки -->
   <section class="screen" id="screen-settings">
-    <div class="panel wide">
-      <div class="panel-head"><h2>Настройки</h2></div>
-      <div class="tabs" id="settings-tabs"></div>
-      <div id="settings-body"></div>
+    <div class="panel wide settings-panel">
+      <div class="set-tabs" id="settings-tabs"></div>
+      <div class="set-body"><div id="settings-body"></div></div>
     </div>
   </section>
 </div>
+
+<!-- Окно содержимого кейса -->
+<div id="modal" class="overlay hidden"><div class="panel modal-panel"><div class="panel-head"><h2 id="modal-title"></h2><button class="close" id="modal-close">✕</button></div><div id="modal-body"></div></div></div>
 
 <!-- Открытие кейса -->
 <div id="case-open" class="overlay hidden">
   <div class="case-open-title" id="case-open-title"></div>
   <div class="roulette"><div class="strip" id="roulette-strip"></div><div class="marker"></div></div>
   <div class="case-result" id="case-result"></div>
-  <button class="play-btn" id="case-close">Забрать</button>
+  <div class="row-btns"><button class="menu-btn" id="case-sell">Продать</button><button class="play-btn small" id="case-close">Забрать</button></div>
 </div>
 
 <!-- Пауза -->
@@ -149,7 +169,7 @@
     <div class="panel-head"><h2>Пауза</h2></div>
     <button class="menu-btn primary" id="resume-btn">Продолжить</button>
     <button class="menu-btn" id="pause-settings">Настройки</button>
-    <button class="menu-btn danger" id="quit-btn">Выйти в меню</button>
+    <button class="menu-btn danger" id="quit-btn">Покинуть матч</button>
     <p class="hint" id="pause-hint"></p>
   </div>
 </div>
@@ -160,7 +180,7 @@
     <h2 id="end-title">Победа</h2>
     <div id="end-score"></div>
     <div id="end-stats"></div>
-    <div class="end-buttons"><button class="menu-btn" id="end-menu">В меню</button><button class="play-btn" id="end-again">Ещё раз</button></div>
+    <div class="end-buttons"><button class="menu-btn" id="end-menu">В меню</button><button class="play-btn small" id="end-again">Ещё раз</button></div>
   </div>
 </div>
 
@@ -176,8 +196,9 @@
   </div>
 </div>
 
+<div id="toast"></div>
 <div id="rotate-hint">Поверните устройство горизонтально ⟲</div>
-<div id="loading"><div class="logo">MAXI<span>STRIKE</span></div><div class="load-bar"><i></i></div><div id="load-text">Загрузка…</div></div>
+<div id="loading"><div class="logo">MAXI<span>STRIKE</span></div><div class="load-bar"><i id="load-fill"></i></div><div id="load-text">Загрузка…</div></div>
 
 <script type="module" src="js/main.js"></script>
 </body>

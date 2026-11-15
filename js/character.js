@@ -1,224 +1,194 @@
-// Модель бойца: экипировка, анимация бега/приседа, руки держат оружие (IK).
+// Боец: риггированная модель (Soldier.glb) + анимации + IK рук на оружии.
 import * as THREE from 'three';
-import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
+import { clone as cloneSkinned } from 'three/addons/utils/SkeletonUtils.js';
+import { A } from './assets.js';
 import { buildWeaponModel } from './weapons.js';
-import { mergeVertexColors } from './merge.js';
-const RB = (w, h, d, r = 0.03) => new RoundedBoxGeometry(w, h, d, 2, Math.min(r, w / 2 - 0.001, h / 2 - 0.001, d / 2 - 0.001));
 
 export const TEAM_STYLE = {
-  A: { name: 'Спецназ', uniform: 0x45505e, pants: 0x3a4451, vest: 0x22262c, gear: 0x30353c, helmet: 0x2e353e, glove: 0x151515, boot: 0x181818, skin: 0xc99a76, face: 0x1c1c1e, accent: 0x3d8bff, helmetOn: true },
-  B: { name: 'Наёмники', uniform: 0x5f5b42, pants: 0x7d6e52, vest: 0x6e5a3e, gear: 0x4a3d2b, helmet: 0x3d3a2c, glove: 0x3a2e22, boot: 0x4a3826, skin: 0xb98262, face: 0xb7a37f, accent: 0xd9452b, helmetOn: false },
+  A: { name: 'Спецназ', tint: 0x6a80a3, visor: 0x49a8ff, uniform: 0x3c4756, gear: 0x262b31, glove: 0x18191b, accent: 0x2ec4ff },
+  B: { name: 'Наёмники', tint: 0xc9a77c, visor: 0xff7a3c, uniform: 0x6b5d45, gear: 0x3c3226, glove: 0x2e2419, accent: 0xff7a3c },
 };
-const FFA_TINTS = [0x6e3434, 0x346e48, 0x5b346e, 0x6e6234, 0x346a6e, 0x6e4a34, 0x40446e, 0x6e346a, 0x4d6e34, 0x6e3448, 0x34406e];
+const FFA_TINTS = [0xc07070, 0x70c088, 0xa070c0, 0xc0b070, 0x70b8c0, 0xc09070, 0x8088c0, 0xc070b0, 0x98c070, 0xc07088, 0x7088c0];
 
-// Точки хвата для рук (в координатах оружия)
-const HOLD = {
-  ar: { r: [0, -0.055, 0.07], l: [0, 0.035, -0.3] },
-  smg: { r: [0, -0.055, 0.06], l: [0, -0.05, -0.155] },
-  sniper: { r: [0, -0.055, 0.09], l: [0, 0.02, -0.3] },
-  shotgun: { r: [0, -0.055, 0.08], l: [0, 0.02, -0.35] },
-  pistol: { r: [0, -0.05, 0.03], l: [-0.03, -0.06, 0.05] },
-  knife: { r: [0, 0, -0.04], l: null },
-};
-const GUN_POS = {
-  ar: [0.1, -0.05, -0.3], smg: [0.1, -0.05, -0.3], sniper: [0.1, -0.05, -0.28], shotgun: [0.1, -0.05, -0.3],
-  pistol: [0.04, 0.0, -0.42], knife: [0.18, -0.12, -0.3],
-};
+const GUN_OFFSET = new THREE.Vector3(0.13, -0.1, -0.16);
+const PISTOL_OFFSET = new THREE.Vector3(0.06, -0.06, -0.4);
+const KNIFE_OFFSET = new THREE.Vector3(0.2, -0.25, -0.28);
 
-const matCache = new Map();
-function mat(color, rough = 0.85, metal = 0) {
-  const k = color + ':' + rough + ':' + metal;
-  if (!matCache.has(k)) matCache.set(k, new THREE.MeshStandardMaterial({ color, roughness: rough, metalness: metal }));
-  return matCache.get(k);
+const _v1 = new THREE.Vector3(), _v2 = new THREE.Vector3(), _v3 = new THREE.Vector3(), _v4 = new THREE.Vector3();
+const _q1 = new THREE.Quaternion(), _q2 = new THREE.Quaternion(), _q3 = new THREE.Quaternion();
+const _e = new THREE.Euler();
+const X = new THREE.Vector3(1, 0, 0);
+
+// Повернуть кость так, чтобы направление (кость → дочерняя точка) смотрело на target
+function aimBone(bone, childWorld, targetWorld) {
+  const origin = bone.getWorldPosition(_v1);
+  const cur = _v2.subVectors(childWorld, origin).normalize();
+  const want = _v3.subVectors(targetWorld, origin).normalize();
+  const delta = _q1.setFromUnitVectors(cur, want);
+  bone.getWorldQuaternion(_q2);
+  _q2.premultiply(delta);
+  bone.parent.getWorldQuaternion(_q3).invert();
+  bone.quaternion.copy(_q3.multiply(_q2));
+  bone.updateMatrixWorld(true);
 }
 
-// Сегмент конечности: вдоль +Z от начала координат
-function limbGeo(r0, r1, len) {
-  const g = new THREE.CylinderGeometry(r1, r0, len, 10, 1);
-  g.rotateX(Math.PI / 2); g.translate(0, 0, len / 2);
-  const cap = new THREE.SphereGeometry(r0, 10, 8); // сустав
-  return [g, cap];
+// 2-звенная IK: upper → lower → end
+function solveIK(upper, lower, end, target, pole, lenA, lenB) {
+  const S = upper.getWorldPosition(new THREE.Vector3());
+  const dir = new THREE.Vector3().subVectors(target, S);
+  let d = dir.length();
+  d = Math.min(Math.max(d, Math.abs(lenA - lenB) + 0.01), lenA + lenB - 0.005);
+  dir.normalize();
+  const cosA = (lenA * lenA + d * d - lenB * lenB) / (2 * lenA * d), sinA = Math.sqrt(Math.max(0, 1 - cosA * cosA));
+  const bend = pole.clone().addScaledVector(dir, -pole.dot(dir)).normalize();
+  const E = S.clone().addScaledVector(dir, lenA * cosA).addScaledVector(bend, lenA * sinA);
+  const T = S.clone().addScaledVector(dir, d);
+  aimBone(upper, lower.getWorldPosition(_v4), E);
+  aimBone(lower, end.getWorldPosition(_v4), T);
 }
-function mesh(geo, m, parent, x = 0, y = 0, z = 0) {
-  const o = new THREE.Mesh(geo, m);
-  o.position.set(x, y, z); o.castShadow = true;
-  parent.add(o);
-  return o;
-}
-
-const ZF = new THREE.Vector3(0, 0, 1);
-const tmpA = new THREE.Vector3(), tmpB = new THREE.Vector3(), tmpC = new THREE.Vector3(), tmpP = new THREE.Vector3();
 
 export class CharacterModel {
   constructor(team, ffaIndex = -1) {
-    const st = { ...(TEAM_STYLE[team] || TEAM_STYLE.A) };
-    if (ffaIndex >= 0) { st.uniform = FFA_TINTS[ffaIndex % FFA_TINTS.length]; st.pants = new THREE.Color(st.uniform).multiplyScalar(0.8).getHex(); }
-    this.st = st;
-    const root = new THREE.Group();
-    this.root = root;
-    this.hips = new THREE.Group(); this.hips.position.y = 0.95; root.add(this.hips);
-    mesh(RB(0.34, 0.22, 0.22, 0.07), mat(st.pants), this.hips, 0, 0.02, 0);
-    mesh(RB(0.36, 0.06, 0.24, 0.025), mat(st.gear, 0.7), this.hips, 0, 0.1, 0); // ремень
-    mesh(RB(0.07, 0.16, 0.11, 0.02), mat(st.gear, 0.7), this.hips, 0.2, -0.04, 0.02); // кобура
-
-    // Ноги
-    this.legs = [];
-    for (const sx of [-1, 1]) {
-      const thigh = new THREE.Group(); thigh.position.set(sx * 0.1, -0.03, 0); this.hips.add(thigh);
-      mesh(new THREE.CylinderGeometry(0.075, 0.085, 0.44, 10), mat(st.pants), thigh, 0, -0.22, 0);
-      mesh(RB(0.06, 0.14, 0.12, 0.02), mat(st.pants, 0.9), thigh, sx * 0.075, -0.24, 0); // карман
-      const knee = new THREE.Group(); knee.position.y = -0.44; thigh.add(knee);
-      mesh(new THREE.CylinderGeometry(0.065, 0.075, 0.42, 10), mat(st.pants), knee, 0, -0.21, 0);
-      mesh(RB(0.12, 0.13, 0.06, 0.025), mat(st.gear, 0.6), knee, 0, -0.03, -0.065); // наколенник
-      const boot = mesh(RB(0.13, 0.13, 0.28, 0.04), mat(st.boot, 0.6), knee, 0, -0.43, -0.04);
-      mesh(RB(0.14, 0.035, 0.29, 0.012), mat(0x0e0e0e, 0.9), boot, 0, -0.06, 0);
-      this.legs.push({ thigh, knee });
-    }
-
-    // Корпус
-    this.spine = new THREE.Group(); this.spine.position.y = 0.1; this.hips.add(this.spine);
-    const torso = new THREE.CapsuleGeometry(0.14, 0.26, 4, 10); torso.scale(1.3, 1, 0.8);
-    mesh(torso, mat(st.uniform), this.spine, 0, 0.27, 0);
-    mesh(RB(0.4, 0.38, 0.29, 0.06), mat(st.vest, 0.75), this.spine, 0, 0.3, 0);
-    for (const sx of [-1, 1]) mesh(RB(0.1, 0.05, 0.3, 0.02), mat(st.vest, 0.75), this.spine, sx * 0.13, 0.5, 0);
-    for (const px of [-0.12, 0, 0.12]) mesh(RB(0.1, 0.14, 0.07, 0.02), mat(st.gear, 0.7), this.spine, px, 0.2, -0.16);
-    mesh(RB(0.12, 0.08, 0.05, 0.015), mat(st.gear, 0.7), this.spine, 0.1, 0.38, -0.155);
-    mesh(RB(0.28, 0.3, 0.09, 0.035), mat(st.gear, 0.75), this.spine, 0, 0.3, 0.175); // рюкзак
-    const patch = mesh(new THREE.BoxGeometry(0.08, 0.05, 0.01), new THREE.MeshStandardMaterial({ color: st.accent, emissive: st.accent, emissiveIntensity: 0.25 }), this.spine, -0.11, 0.4, -0.145);
-    patch.castShadow = false;
-    mesh(new THREE.CylinderGeometry(0.05, 0.06, 0.1, 8), mat(st.face), this.spine, 0, 0.52, 0);
-
-    // Голова
-    this.head = new THREE.Group(); this.head.position.y = 0.56; this.spine.add(this.head);
-    const headG = new THREE.SphereGeometry(0.105, 14, 12); headG.scale(0.92, 1.12, 1);
-    mesh(headG, mat(st.skin, 0.8), this.head, 0, 0.1, 0);
-    mesh(RB(0.03, 0.03, 0.03, 0.01), mat(st.skin, 0.8), this.head, 0, 0.1, -0.105);
-    if (st.helmetOn) {
-      const mask = new THREE.SphereGeometry(0.11, 14, 10, 0, Math.PI * 2, Math.PI * 0.52, Math.PI * 0.48); mask.scale(0.95, 1.12, 1.03);
-      mesh(mask, mat(st.face, 0.95), this.head, 0, 0.1, 0);
-      mesh(RB(0.2, 0.055, 0.06, 0.02), mat(0x0d0d0d, 0.15, 0.6), this.head, 0, 0.14, -0.085);
-      const hel = new THREE.SphereGeometry(0.128, 16, 10, 0, Math.PI * 2, 0, Math.PI * 0.55); hel.scale(1, 0.92, 1.08);
-      mesh(hel, mat(st.helmet, 0.6, 0.1), this.head, 0, 0.12, 0.005);
-      mesh(RB(0.05, 0.05, 0.05, 0.012), mat(0x1a1a1a, 0.5, 0.3), this.head, 0, 0.215, -0.12);
-      for (const sx of [-1, 1]) mesh(RB(0.03, 0.07, 0.11, 0.012), mat(st.gear), this.head, sx * 0.125, 0.15, 0);
-    } else {
-      // шемаг и кепка
-      const wrap = new THREE.SphereGeometry(0.112, 14, 10, 0, Math.PI * 2, Math.PI * 0.45, Math.PI * 0.5); wrap.scale(0.95, 1.1, 1.02);
-      mesh(wrap, mat(st.face, 0.95), this.head, 0, 0.09, 0);
-      const cap = new THREE.SphereGeometry(0.114, 14, 8, 0, Math.PI * 2, 0, Math.PI * 0.45);
-      mesh(cap, mat(st.helmet, 0.8), this.head, 0, 0.115, 0);
-      mesh(new THREE.BoxGeometry(0.14, 0.015, 0.09), mat(st.helmet, 0.8), this.head, 0, 0.17, -0.13);
-      mesh(new THREE.BoxGeometry(0.17, 0.045, 0.04), mat(0x101010, 0.15, 0.7), this.head, 0, 0.13, -0.09); // очки
-    }
-
-    // Руки + оружие (всё вращается по вертикали прицела)
-    this.aim = new THREE.Group(); this.aim.position.y = 0.42; this.spine.add(this.aim);
-    this.gunHolder = new THREE.Group(); this.aim.add(this.gunHolder);
-    this.arms = [];
-    for (const sx of [1, -1]) {
-      const shoulder = new THREE.Vector3(sx * 0.19, 0.02, sx > 0 ? 0.03 : -0.06);
-      mesh(new THREE.SphereGeometry(0.075, 10, 8), mat(st.uniform), this.aim, shoulder.x, shoulder.y, shoulder.z);
-      const [ug, ucap] = limbGeo(0.064, 0.056, 0.3);
-      const upper = new THREE.Group(); this.aim.add(upper);
-      mesh(ug, mat(st.uniform), upper); mesh(ucap, mat(st.uniform), upper);
-      const [fg, fcap] = limbGeo(0.056, 0.047, 0.29);
-      const fore = new THREE.Group(); this.aim.add(fore);
-      mesh(fg, mat(st.uniform), fore); mesh(fcap, mat(st.uniform), fore);
-      const hand = new THREE.Group(); this.aim.add(hand);
-      mesh(RB(0.075, 0.09, 0.11, 0.025), mat(st.glove, 0.7), hand, 0, 0, 0.01);
-      this.arms.push({ sx, shoulder, upper, fore, hand });
-    }
-    // склейка деталей: ~12 объектов вместо ~60
-    for (const grp of [this.hips, this.spine, this.head, ...this.legs.flatMap(l => [l.thigh, l.knee]), ...this.arms.flatMap(a => [a.upper, a.fore, a.hand])]) mergeVertexColors(grp);
-    mergeVertexColors(this.aim);
+    const st = TEAM_STYLE[team] || TEAM_STYLE.A;
+    this.root = new THREE.Group();
+    this.body = new THREE.Group();
+    this.root.add(this.body);
+    const src = A.gltf.soldier;
+    const model = cloneSkinned(src.scene);
+    // модель Soldier уже смотрит в -Z (наше «вперёд»)
+    this.body.add(model);
+    const tint = ffaIndex >= 0 ? FFA_TINTS[ffaIndex % FFA_TINTS.length] : st.tint;
+    model.traverse(o => {
+      if (o.isMesh) {
+        o.castShadow = true; o.receiveShadow = true; o.frustumCulled = false;
+        const m = o.material.clone();
+        if (/Visor/.test(m.name)) { m.color.set(st.visor); m.emissive = new THREE.Color(st.visor); m.emissiveIntensity = 0.35; m.metalness = 0.6; m.roughness = 0.2; }
+        else { m.color.set(tint); m.roughness = Math.max(0.45, m.roughness || 0.6); }
+        o.material = m;
+      }
+    });
+    const b = (n) => model.getObjectByName('mixamorig' + n);
+    this.bones = {
+      hips: b('Hips'), spine: b('Spine'), spine1: b('Spine1'), spine2: b('Spine2'), head: b('Head'),
+      rArm: b('RightArm'), rFore: b('RightForeArm'), rHand: b('RightHand'), rFing: b('RightHandMiddle1'),
+      lArm: b('LeftArm'), lFore: b('LeftForeArm'), lHand: b('LeftHand'), lFing: b('LeftHandMiddle1'),
+      rUp: b('RightUpLeg'), rLeg: b('RightLeg'), rFoot: b('RightFoot'),
+      lUp: b('LeftUpLeg'), lLeg: b('LeftLeg'), lFoot: b('LeftFoot'),
+    };
+    model.updateMatrixWorld(true);
+    const dist = (p, q) => p.getWorldPosition(new THREE.Vector3()).distanceTo(q.getWorldPosition(new THREE.Vector3()));
+    this.len = {
+      ua: dist(this.bones.rArm, this.bones.rFore), fa: dist(this.bones.rFore, this.bones.rHand),
+      th: dist(this.bones.rUp, this.bones.rLeg), sh: dist(this.bones.rLeg, this.bones.rFoot),
+    };
+    this.mixer = new THREE.AnimationMixer(model);
+    const clip = (n) => src.animations.find(a => a.name === n);
+    this.actions = { idle: this.mixer.clipAction(clip('Idle')), walk: this.mixer.clipAction(clip('Walk')), run: this.mixer.clipAction(clip('Run')) };
+    for (const a of Object.values(this.actions)) { a.play(); a.setEffectiveWeight(0); }
+    this.actions.idle.setEffectiveWeight(1);
+    this.mixer.update(Math.random() * 2);
+    this.model = model;
+    this.gun = new THREE.Group();
+    this.root.add(this.gun);
     this.weaponId = null;
-    this.walkPhase = Math.random() * 10;
     this.deathT = 0;
-    this.t = Math.random() * 10;
   }
 
   setWeapon(id, skin) {
-    if (this.weaponId === id && this.skinId === (skin && skin.id)) return;
-    this.weaponId = id; this.skinId = skin && skin.id;
-    this.gunHolder.clear();
-    const gun = buildWeaponModel(id, skin);
-    this.gunHolder.add(gun);
-    const gp = GUN_POS[id] || GUN_POS.ar;
-    this.gunHolder.position.set(gp[0], gp[1], gp[2]);
-    this.muzzle = gun.userData.muzzle;
-  }
-
-  // 2-звенная IK: плечо → локоть → кисть
-  solveArm(arm, target, pole) {
-    const S = arm.shoulder, a = 0.3, b = 0.29;
-    tmpA.subVectors(target, S);
-    let d = tmpA.length();
-    d = Math.min(Math.max(d, 0.08), a + b - 0.001);
-    const dir = tmpA.normalize();
-    const cosA = (a * a + d * d - b * b) / (2 * a * d), sinA = Math.sqrt(Math.max(0, 1 - cosA * cosA));
-    tmpP.copy(pole).addScaledVector(dir, -pole.dot(dir)).normalize();
-    const E = tmpB.copy(S).addScaledVector(dir, a * cosA).addScaledVector(tmpP, a * sinA);
-    const T = tmpC.copy(S).addScaledVector(dir, d);
-    arm.upper.position.copy(S);
-    arm.upper.quaternion.setFromUnitVectors(ZF, tmpA.subVectors(E, S).normalize());
-    arm.fore.position.copy(E);
-    arm.fore.quaternion.setFromUnitVectors(ZF, tmpA.subVectors(T, E).normalize());
-    arm.hand.position.copy(T);
-    arm.hand.quaternion.copy(arm.fore.quaternion);
-  }
-
-  updateArms(knifeSwing = 0) {
-    const hold = HOLD[this.weaponId] || HOLD.ar;
-    const gp = this.gunHolder.position;
-    for (const arm of this.arms) {
-      const h = arm.sx > 0 ? hold.r : hold.l;
-      let target;
-      if (h) target = new THREE.Vector3(gp.x + h[0], gp.y + h[1], gp.z + h[2]);
-      else target = new THREE.Vector3(arm.sx * 0.24, -0.38, -0.05); // свободная рука
-      if (arm.sx > 0 && this.weaponId === 'knife' && knifeSwing > 0) target.z -= knifeSwing * 0.25;
-      const pole = new THREE.Vector3(arm.sx * 0.8, -1, 0.4);
-      this.solveArm(arm, target, pole);
-    }
+    const sid = skin ? skin.id : '';
+    if (this.weaponId === id && this.skinId === sid) return;
+    this.weaponId = id; this.skinId = sid;
+    this.gun.clear();
+    const w = buildWeaponModel(id, skin);
+    this.gun.add(w);
+    this.gunModel = w;
+    this.muzzle = w.userData.muzzle;
   }
 
   update(dt, a) {
     const r = this.root;
-    this.t += dt;
     r.position.set(a.pos.x, a.pos.y, a.pos.z);
+    r.rotation.set(0, a.yaw, 0);
+    const speed = Math.hypot(a.vel.x, a.vel.z);
+    const wRun = THREE.MathUtils.clamp((speed - 2.6) / 1.6, 0, 1);
+    const wWalk = THREE.MathUtils.clamp(speed / 2.2, 0, 1) * (1 - wRun);
+    this.actions.idle.setEffectiveWeight(Math.max(0, 1 - wWalk - wRun));
+    this.actions.walk.setEffectiveWeight(wWalk);
+    this.actions.run.setEffectiveWeight(wRun);
+    const fwd = -(Math.sin(a.yaw) * a.vel.x + Math.cos(a.yaw) * a.vel.z);
+    const dirSign = fwd < -0.5 ? -1 : 1;
+    this.actions.run.timeScale = dirSign * THREE.MathUtils.clamp(speed / 5.2, 0.6, 1.3);
+    this.actions.walk.timeScale = dirSign * THREE.MathUtils.clamp(speed / 1.8, 0.6, 1.6);
+    this.mixer.update(a.alive ? dt : 0);
+
     if (!a.alive) {
-      this.deathT = Math.min(1, this.deathT + dt * 2.4);
+      this.deathT = Math.min(1, this.deathT + dt * 2.2);
       const e = 1 - Math.pow(1 - this.deathT, 3);
-      r.rotation.set(-e * Math.PI / 2 * (this.deathDir || 1) * 0.98, a.yaw, 0, 'YXZ');
-      r.position.y = a.pos.y + Math.sin(e * Math.PI) * 0.1 + e * 0.12;
-      this.legs[0].knee.rotation.x = -e * 0.5;
+      this.body.rotation.x = e * Math.PI / 2 * (this.deathDir || 1) * 0.97;
+      this.body.position.y = Math.sin(e * Math.PI) * 0.15 + e * 0.12;
+      this.gun.visible = this.deathT < 0.15;
       return;
     }
-    this.deathT = 0;
-    r.rotation.set(0, a.yaw, 0, 'YXZ');
-    const speed = Math.hypot(a.vel.x, a.vel.z);
+    this.deathT = 0; this.body.rotation.x = 0; this.body.position.y = 0; this.gun.visible = true;
+    r.updateMatrixWorld(true);
+    const B = this.bones;
+    const fwdV = new THREE.Vector3(-Math.sin(a.yaw), 0, -Math.cos(a.yaw));
+    const right = new THREE.Vector3(Math.cos(a.yaw), 0, -Math.sin(a.yaw));
+
+    // присед: опускаем таз, стопы остаются на земле (IK)
     const c = a.crouchT || 0;
-    const amt = Math.min(1, speed / 4.5);
-    this.walkPhase += dt * (3 + speed * 1.55);
-    const ph = this.walkPhase;
-    // локальная скорость (бег назад/вбок)
-    const fwd = -(Math.sin(a.yaw) * a.vel.x + Math.cos(a.yaw) * a.vel.z) >= -0.5 ? 1 : -1;
-    this.hips.position.y = 0.95 - c * 0.37 + Math.abs(Math.sin(ph)) * 0.035 * amt;
-    for (let i = 0; i < 2; i++) {
-      const L = this.legs[i], p = ph + i * Math.PI;
-      const swing = Math.sin(p) * 0.65 * amt * fwd;
-      const bend = Math.max(0, Math.sin(p + Math.PI / 2 * fwd)) * 1.1 * amt + 0.08;
-      L.thigh.rotation.x = swing + c * (i ? 1.35 : 0.5);
-      L.knee.rotation.x = -bend - c * (i ? 1.7 : 1.9);
-      L.thigh.rotation.z = 0;
+    if (c > 0.02) {
+      const lf = B.lFoot.getWorldPosition(new THREE.Vector3()), rf = B.rFoot.getWorldPosition(new THREE.Vector3());
+      const hw = B.hips.getWorldPosition(new THREE.Vector3());
+      const l0 = B.hips.parent.worldToLocal(hw.clone()), l1 = B.hips.parent.worldToLocal(hw.clone().add(new THREE.Vector3(0, -0.4 * c, 0)));
+      B.hips.position.add(l1.sub(l0));
+      B.hips.updateMatrixWorld(true);
+      const pole = fwdV.clone().add(new THREE.Vector3(0, 0.3, 0));
+      solveIK(B.lUp, B.lLeg, B.lFoot, lf.addScaledVector(fwdV, 0.15 * c), pole, this.len.th, this.len.sh);
+      solveIK(B.rUp, B.rLeg, B.rFoot, rf.addScaledVector(fwdV, -0.1 * c), pole, this.len.th, this.len.sh);
     }
-    if (c > 0.01) { this.legs[1].knee.rotation.x += 0; }
-    this.spine.rotation.x = c * 0.18 + amt * 0.08;
-    this.spine.position.y = 0.1 + Math.sin(this.t * 2) * 0.004;
-    this.aim.rotation.x = a.pitch - this.spine.rotation.x;
-    this.head.rotation.x = a.pitch * 0.5;
-    // отдача
-    const kick = Math.max(0, (a.lastShotT || -9) + 0.08 - (a.timeRef || 0)) * 3;
-    this.gunHolder.position.z = (GUN_POS[this.weaponId] || GUN_POS.ar)[2] + kick * 0.04;
-    this.updateArms(a.knifeSwing || 0);
+
+    // наклон корпуса по вертикали прицела (вокруг оси «вправо»)
+    const pitch = a.pitch;
+    for (const bone of [B.spine, B.spine1, B.spine2]) {
+      bone.getWorldQuaternion(_q2);
+      _q1.setFromAxisAngle(right, pitch / 3);
+      _q2.premultiply(_q1);
+      bone.parent.getWorldQuaternion(_q3).invert();
+      bone.quaternion.copy(_q3.multiply(_q2));
+      bone.updateMatrixWorld(true);
+    }
+
+    // оружие у плеча
+    const ud = this.gunModel ? this.gunModel.userData : null;
+    const chest = B.spine2.getWorldPosition(new THREE.Vector3());
+    const isPistol = /^p\d/.test(this.weaponId || '');
+    const off = (ud && (ud.knife || ud.grenade)) ? KNIFE_OFFSET : isPistol ? PISTOL_OFFSET : GUN_OFFSET;
+    _e.set(pitch, a.yaw, 0, 'YXZ');
+    _q2.setFromEuler(_e);
+    const kickBack = Math.max(0, (a.lastShotT || -9) + 0.09 - (a.timeRef || 0)) * 0.5;
+    const offW = off.clone().add(new THREE.Vector3(0, 0, kickBack)).applyQuaternion(_q2);
+    const gunWorld = chest.add(offW).add(new THREE.Vector3(0, 0.1, 0));
+    this.gun.position.copy(r.worldToLocal(gunWorld));
+    this.gun.rotation.set(pitch, 0, 0);
+    this.gun.updateMatrixWorld(true);
+
+    // руки на оружии
+    if (ud && ud.gripR) {
+      const tR = this.gunModel.localToWorld(ud.gripR.clone());
+      if ((ud.knife || ud.grenade) && a.knifeSwing) tR.addScaledVector(fwdV, a.knifeSwing * 0.3);
+      solveIK(B.rArm, B.rFore, B.rHand, tR, right.clone().multiplyScalar(0.6).add(new THREE.Vector3(0, -1, 0)), this.len.ua, this.len.fa);
+      const gq = this.gunModel.getWorldQuaternion(new THREE.Quaternion());
+      const gLeft = new THREE.Vector3(-1, 0, 0).applyQuaternion(gq), gDown = new THREE.Vector3(0, -1, 0).applyQuaternion(gq), gFwd = new THREE.Vector3(0, 0, -1).applyQuaternion(gq);
+      // пальцы обхватывают рукоять
+      aimBone(B.rHand, B.rFing.getWorldPosition(new THREE.Vector3()), tR.clone().addScaledVector(gLeft, 0.1).addScaledVector(gDown, 0.05).addScaledVector(gFwd, 0.03));
+      if (ud.gripL) {
+        const tL = this.gunModel.localToWorld(ud.gripL.clone());
+        solveIK(B.lArm, B.lFore, B.lHand, tL, right.clone().multiplyScalar(-0.8).add(new THREE.Vector3(0, -1, 0)), this.len.ua, this.len.fa);
+        aimBone(B.lHand, B.lFing.getWorldPosition(new THREE.Vector3()), tL.clone().addScaledVector(gLeft, -0.1).addScaledVector(gFwd, 0.04));
+      }
+    }
   }
+
+  dispose() { this.mixer.stopAllAction(); }
 }
