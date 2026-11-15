@@ -7,8 +7,8 @@ import { TEAM_STYLE } from './character.js';
 import { surface } from './textures.js';
 
 // Положение точки хвата относительно глаза
-const HIP = { pistol: [0.09, -0.105, -0.3], smg: [0.105, -0.13, -0.24], rifle: [0.105, -0.135, -0.22], sniper: [0.105, -0.13, -0.2], shotgun: [0.105, -0.13, -0.23], knife: [0.12, -0.12, -0.24], grenade: [0.12, -0.12, -0.25] };
-const ADS_Z = { pistol: -0.3, smg: -0.15, rifle: -0.14, sniper: -0.1, shotgun: -0.16 };
+const HIP = { pistol: [0.1, -0.12, -0.38], smg: [0.105, -0.13, -0.24], rifle: [0.105, -0.135, -0.22], sniper: [0.105, -0.13, -0.2], shotgun: [0.105, -0.13, -0.23], knife: [0.12, -0.12, -0.24], grenade: [0.12, -0.12, -0.25] };
+const ADS_Z = { pistol: -0.38, smg: -0.15, rifle: -0.14, sniper: -0.1, shotgun: -0.16 };
 
 function category(id) {
   if (KNIVES[id]) return 'knife';
@@ -87,7 +87,7 @@ export class ViewModel {
     const hand = (H, dir, right, parent) => {
       const g = new THREE.Group(); g.position.copy(H);
       g.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, 1), dir);
-      const palm = new THREE.Mesh(new RoundedBoxGeometry(0.07, 0.085, 0.09, 2, 0.02), glove); palm.position.set(right ? 0.012 : -0.012, 0, 0.03); g.add(palm);
+      const palm = new THREE.Mesh(new RoundedBoxGeometry(0.06, 0.075, 0.08, 2, 0.02), glove); palm.position.set(right ? 0.01 : -0.01, 0, 0.03); g.add(palm);
       const k = new THREE.Mesh(new RoundedBoxGeometry(0.02, 0.07, 0.03, 2, 0.008), knuckle); k.position.set(right ? 0.044 : -0.044, 0.005, 0.025); g.add(k);
       for (let f = 0; f < 4; f++) {
         const f1 = new THREE.Mesh(new RoundedBoxGeometry(0.02, 0.019, 0.04, 2, 0.008), glove);
@@ -212,7 +212,7 @@ export class ViewModel {
       hip[1] + (ads[1] - hip[1]) * a + by + sy - drop - crouchOff,
       hip[2] + (ads[2] - hip[2]) * a + this.kick * 0.03 * (1 - a * 0.5),
     );
-    this.holder.rotation.set(0, (1 - a) * 0.05, (1 - a) * 0.03);
+    this.holder.rotation.set(0, (1 - a) * 0.13, (1 - a) * 0.04);
     this.pivot.rotation.set(rx, ry, rz);
     this.holder.visible = !scoped;
     this.flashT -= dt;

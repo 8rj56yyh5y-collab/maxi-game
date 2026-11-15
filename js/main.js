@@ -132,8 +132,9 @@ function renderLobby(dt) {
     lobby.camera.lookAt(0, 1.0, 0);
   } else {
     if (lobby.weapon) { lobby.weapon.rotation.y = Math.sin(lobby.t * 0.45) * 0.6 - Math.PI / 2 + 0.25; lobby.weapon.position.y = Math.sin(lobby.t * 1.2) * 0.02; }
-    lobby.camera.position.set(0, 1.25, 3.4);
-    lobby.camera.lookAt(0, 1.1, 0);
+    const off = aspect > 1.3 ? -0.42 : 0;
+    lobby.camera.position.set(off, 1.25, 3.4);
+    lobby.camera.lookAt(off, 1.1, 0);
   }
   lobby.dust.rotation.y += dt * 0.02;
   renderer.toneMappingExposure = 1.0;
