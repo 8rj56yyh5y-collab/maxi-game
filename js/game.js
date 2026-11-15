@@ -10,6 +10,7 @@ import { makeBrain, updateBot, hearShot } from './bots.js';
 import { equippedSkin, SKINS } from './skins.js';
 import { settings } from './settings.js';
 import { sound } from './audio.js';
+import { setupAtmosphere, followShadow, Pipeline } from './render.js';
 
 const BOT_NAMES = ['Ястреб', 'Гром', 'Тень', 'Кобра', 'Север', 'Шаман', 'Бизон', 'Фантом', 'Рысь', 'Дизель', 'Вектор', 'Призрак', 'Медведь', 'Сокол', 'Танкист', 'Буран', 'Жук', 'Кэп', 'Волк', 'Сапёр'];
 
@@ -21,13 +22,17 @@ export class Game {
   constructor(renderer, input, hud, cfg, callbacks) {
     this.renderer = renderer; this.input = input; this.hud = hud; this.cfg = cfg; this.cb = callbacks;
     this.scene = new THREE.Scene();
-    this.camera = new THREE.PerspectiveCamera(settings.fov, innerWidth / innerHeight, 0.05, 400);
+    this.camera = new THREE.PerspectiveCamera(settings.fov, innerWidth / innerHeight, 0.05, 1000);
     this.camera.rotation.order = 'YXZ';
     this.map = buildMap(this.scene, cfg.map, settings.quality);
     this.colliders = this.map.colliders;
     this.nav = this.map.nav;
+    this.atmo = setupAtmosphere(renderer, this.scene, this.map.def, settings.quality);
     this.effects = new Effects(this.scene);
     this.vm = new ViewModel();
+    this.vm.setEnvironment(this.atmo.env, this.map.def.sun);
+    this.pipeline = new Pipeline(renderer);
+    this.pipeline.setup(this.scene, this.camera, this.vm.scene, this.vm.camera, this.atmo.exposure);
     this.time = 0;
     this.timeLeft = cfg.minutes * 60;
     this.score = { A: 0, B: 0 };
@@ -47,6 +52,22 @@ export class Game {
     for (const a of this.actors) this.respawn(a, true);
     this.equipPlayerView();
     this.updateHudStatic();
+    this.warmup();
+    this.hud.el.goal.textContent = cfg.mode === 'ffa' ? `FFA · до ${cfg.killsToWin}` : `до ${cfg.killsToWin}`;
+  }
+
+  // Компиляция всех шейдеров заранее (иначе — фризы при первом выстреле)
+  warmup() {
+    const hidden = [];
+    const show = (o) => { o.traverse(c => { if (!c.visible) { hidden.push(c); c.visible = true; } }); };
+    show(this.scene); show(this.vm.scene);
+    this.vm.flashLight.intensity = 1;
+    try {
+      this.renderer.compile(this.scene, this.camera);
+      this.renderer.compile(this.vm.scene, this.vm.camera);
+    } catch (e) { /* ignore */ }
+    for (const c of hidden) c.visible = false;
+    this.vm.flashLight.intensity = 0;
   }
 
   // ---------- создание ----------
@@ -59,7 +80,7 @@ export class Game {
         id: this.actors.length, name: isPlayer ? 'Вы' : names[ni++ % names.length], team, isPlayer,
         pos: new THREE.Vector3(), vel: new THREE.Vector3(), yaw: 0, pitch: 0,
         radius: 0.35, height: 1.8, onGround: true, crouchT: 0,
-        health: 100, alive: false, kills: 0, deaths: 0, headshots: 0, score: 0,
+        health: 100, armor: 100, alive: false, kills: 0, deaths: 0, headshots: 0, score: 0,
         slots: [isPlayer ? this.cfg.primary : pickBotPrimary(), 'pistol', 'knife'], cur: 0, lastSlot: 1,
         ammo: {}, nextFire: 0, reloadUntil: 0, switchUntil: 0, bloom: 0, shotsInRow: 0,
         respawnAt: 0, protectUntil: 0, spottedUntil: 0, triggerHeld: false, killer: null,
@@ -86,7 +107,7 @@ export class Game {
 
   isEnemy(a, b) { return a !== b && (a.team === 'F' || a.team !== b.team); }
 
-  eyePos(a) { return { x: a.pos.x, y: a.pos.y + EYE - a.crouchT * 0.45, z: a.pos.z }; }
+  eyePos(a) { return { x: a.pos.x, y: a.pos.y + EYE - a.crouchT * 0.4, z: a.pos.z }; }
 
   spot(e, by) {
     if (!this.isEnemy(this.player, e)) return;
@@ -143,7 +164,7 @@ export class Game {
     a.pos.set(p.x, 0, p.z); a.vel.set(0, 0, 0);
     const cx = (this.map.def.bounds[0] + this.map.def.bounds[2]) / 2, cz = (this.map.def.bounds[1] + this.map.def.bounds[3]) / 2;
     a.yaw = Math.atan2(-(cx - p.x), -(cz - p.z)); a.pitch = 0;
-    a.health = 100; a.alive = true; a.crouchT = 0; a.height = 1.8;
+    a.health = 100; a.armor = 100; a.alive = true; a.crouchT = 0; a.height = 1.8;
     a.protectUntil = this.time + (initial ? 0 : 2);
     a.killer = null;
     this.resetLoadout(a);
@@ -249,6 +270,7 @@ export class Game {
           const bf = { x: -Math.sin(res.actor.yaw), z: -Math.cos(res.actor.yaw) };
           if (bf.x * dir.x + bf.z * dir.z > 0.5) dmg = 120;
         }
+        if (res.part !== 'legs' && !w.melee && res.actor.armor > 0) { res.actor.armor = Math.max(0, res.actor.armor - dmg * 0.5); dmg *= 0.7; }
         h.dmg += dmg;
         hits.set(res.actor, h);
         this.effects.blood(res.point);
@@ -263,6 +285,8 @@ export class Game {
     const from = this.muzzleWorld(a);
     if (!w.melee && firstEnd && (Math.random() < 0.6 || isP)) this.effects.tracer(from, firstEnd);
     this.playAt(a, () => (vol, pan) => sound.shot(w.sound, vol, pan));
+    a.lastShotT = this.time;
+    if (w.melee) a.knifeSwing = 1;
     if (!w.melee) {
       a.bloom = Math.min(w.maxBloom, a.bloom + w.bloomPerShot);
       a.shotsInRow++;
@@ -294,7 +318,7 @@ export class Game {
 
   hitboxes(e) {
     const c = e.crouchT, x = e.pos.x, y = e.pos.y, z = e.pos.z;
-    const legsTop = 0.85 - c * 0.3, bodyTop = 1.45 - c * 0.45, headTop = bodyTop + 0.34;
+    const legsTop = 0.85 - c * 0.3, bodyTop = 1.5 - c * 0.37, headTop = bodyTop + 0.34;
     const fx = -Math.sin(e.yaw) * 0.04, fz = -Math.cos(e.yaw) * 0.04;
     return [
       { part: 'head', min: [x + fx - 0.15, y + bodyTop, z + fz - 0.15], max: [x + fx + 0.15, y + headTop, z + fz + 0.15] },
@@ -336,7 +360,7 @@ export class Game {
       // угол относительно взгляда: 0 — впереди, по часовой стрелке
       const ang = Math.atan2(-(attacker.pos.x - victim.pos.x), -(attacker.pos.z - victim.pos.z));
       this.hud.damage(victim.yaw - ang);
-      this.hud.setHealth(victim.health);
+      this.hud.setHealth(victim.health, victim.armor);
     }
     if (killed) this.kill(victim, attacker, weaponId, head);
   }
@@ -344,7 +368,7 @@ export class Game {
   kill(victim, killer, weaponId, head) {
     victim.alive = false; victim.health = 0; victim.deaths++;
     victim.respawnAt = this.time + (victim.isPlayer ? RESPAWN + 1 : RESPAWN);
-    victim.killer = killer;
+    victim.killer = killer; victim.killerWeapon = weaponId;
     if (victim.model) victim.model.deathDir = Math.random() < 0.5 ? 1 : -1;
     killer.kills++; killer.score += head ? 120 : 100;
     if (head) killer.headshots++;
@@ -403,7 +427,7 @@ export class Game {
     const p = this.player;
     const top = this.actors.reduce((m, a) => a !== p && a.kills > m ? a.kills : m, 0);
     this.hud.setScores(this.score.A, this.score.B, this.cfg.mode, p.kills, top);
-    this.hud.setHealth(p.health);
+    this.hud.setHealth(p.health, p.armor);
   }
 
   // ---------- обновление ----------
@@ -421,8 +445,22 @@ export class Game {
         if (this.time >= a.respawnAt && !this.over) this.respawn(a);
       } else if (!this.over) updateBot(this, a, dt);
       else a.ctrl = { wishX: 0, wishZ: 0, speedMul: 1 };
-      if (a.alive) this.simulate(a, dt, a.ctrl || {});
+      if (a.alive) {
+        this.simulate(a, dt, a.ctrl || {});
+        // шаги ботов слышно (как в CS — бегущего врага можно услышать)
+        const sp = Math.hypot(a.vel.x, a.vel.z);
+        if (a.onGround && sp > 3.2) {
+          a.stepT = (a.stepT || 0) - dt;
+          if (a.stepT <= 0) {
+            a.stepT = 0.36;
+            const d = Math.hypot(a.pos.x - this.camera.position.x, a.pos.z - this.camera.position.z);
+            if (d < 22) this.playAt(a, () => (vol, pan) => sound.step(Math.min(0.35, vol * 0.4) * (1 - d / 22), pan));
+          }
+        }
+      }
       if (a.model) {
+        a.timeRef = this.time;
+        if (a.knifeSwing) a.knifeSwing = Math.max(0, a.knifeSwing - dt * 4);
         a.model.update(dt, a);
         if (!a.alive && this.time > a.respawnAt - 1) a.model.root.visible = false;
       }
@@ -432,6 +470,7 @@ export class Game {
     if (this.input.scoreboard) this.hud.scoreboard(true, this);
     else this.hud.scoreboard(false);
     this.hud.drawMinimap(this, this.player);
+    this.hud.setPips(this);
   }
 
   // Общая физика + оружие для любого бойца
@@ -471,7 +510,7 @@ export class Game {
     if (!p.alive) {
       inp.endFrame();
       const left = p.respawnAt - this.time;
-      this.hud.deathScreen(true, p.killer ? p.killer.name : '', Math.max(0, left));
+      this.hud.deathScreen(true, p.killer ? p.killer.name : '', Math.max(0, left), p.killerWeapon);
       this.hud.setScope(false); this.hud.setCrossVisible(false);
       // камера смотрит на убийцу
       const k = p.killer;
@@ -542,7 +581,7 @@ export class Game {
     const spread = this.currentSpread(p, w);
     const px = spread / Math.tan(this.camera.fov * Math.PI / 360) * (innerHeight / 2);
     this.hud.setCrossGap(Math.min(60, px));
-    this.hud.setCrossVisible(!scoped);
+    this.hud.setCrossVisible(!scoped && !(this.vm.aimT > 0.6 && !w.melee && w.type !== 'shotgun'));
     this.hud.setScope(scoped);
     this.hud.setReload(p.reloadUntil ? 1 - (p.reloadUntil - this.time) / w.reload : -1);
     this.hud.setProtect(this.time < p.protectUntil);
@@ -560,21 +599,19 @@ export class Game {
   }
 
   render() {
-    const r = this.renderer;
-    r.clear();
-    r.render(this.scene, this.camera);
-    if (this.player.alive) {
-      r.clearDepth();
-      r.render(this.vm.scene, this.vm.camera);
-    }
+    followShadow(this.atmo.sun, this.atmo.sunDir, this.camera.position);
+    this.atmo.sky.position.copy(this.camera.position);
+    this.pipeline.render(this.player.alive);
   }
 
   resize(w, h) {
     this.camera.aspect = w / h; this.camera.updateProjectionMatrix();
     this.vm.resize(w / h);
+    this.pipeline.resize();
   }
 
   dispose() {
+    this.pipeline.dispose();
     this.scene.traverse(o => {
       if (o.geometry) o.geometry.dispose();
       if (o.material) (Array.isArray(o.material) ? o.material : [o.material]).forEach(m => m.dispose());

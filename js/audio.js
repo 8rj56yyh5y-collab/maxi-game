@@ -16,13 +16,23 @@ class Sound {
     this.noise = this.ctx.createBuffer(1, len, this.ctx.sampleRate);
     const data = this.noise.getChannelData(0);
     for (let i = 0; i < len; i++) data[i] = Math.random() * 2 - 1;
+    // реверберация (эхо улиц)
+    const rl = this.ctx.sampleRate * 1.4, ir = this.ctx.createBuffer(2, rl, this.ctx.sampleRate);
+    for (let ch = 0; ch < 2; ch++) {
+      const d = ir.getChannelData(ch);
+      for (let i = 0; i < rl; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / rl, 3.2) * (i < 600 ? i / 600 : 1);
+    }
+    this.reverb = this.ctx.createConvolver(); this.reverb.buffer = ir;
+    this.wet = this.ctx.createGain(); this.wet.gain.value = 0.32;
+    this.reverb.connect(this.wet); this.wet.connect(this.master);
   }
 
   setVolume(v) { if (this.master) this.master.gain.value = v; }
 
-  out(vol, pan) {
+  out(vol, pan, wet = 0) {
     const g = this.ctx.createGain();
     g.gain.value = vol;
+    if (wet > 0 && this.reverb) { const w = this.ctx.createGain(); w.gain.value = wet; g.connect(w); w.connect(this.reverb); }
     if (this.ctx.createStereoPanner) {
       const p = this.ctx.createStereoPanner();
       p.pan.value = Math.max(-1, Math.min(1, pan || 0));
@@ -61,7 +71,8 @@ class Sound {
 
   shot(kind, vol = 1, pan = 0) {
     if (!this.ctx || vol < 0.01) return;
-    const d = this.out(vol, pan);
+    // далёкие выстрелы — больше эха и меньше высоких частот
+    const d = this.out(vol, pan, 0.6 + (1 - vol) * 1.2);
     switch (kind) {
       case 'rifle':
         this.burst(d, { dur: 0.22, freq: 2400, gain: 0.9 });

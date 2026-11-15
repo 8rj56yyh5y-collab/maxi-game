@@ -1,13 +1,14 @@
 // Интерфейс во время боя.
 import { settings } from './settings.js';
 import { WEAPONS } from './weapons.js';
+import { iconImg } from './icons.js';
 
 const $ = (id) => document.getElementById(id);
 
 export class HUD {
   constructor() {
     this.el = {
-      hud: $('hud'), hp: $('hp'), hpFill: $('hp-fill'), mag: $('ammo-mag'), res: $('ammo-res'), wname: $('weapon-name'),
+      hud: $('hud'), hp: $('hp'), hpFill: $('hp-fill'), armor: $('armor'), arFill: $('ar-fill'), pipsA: $('pips-a'), pipsB: $('pips-b'), goal: $('goal'), mapName: $('radar-map-name'), kweapon: $('killer-weapon'), mag: $('ammo-mag'), res: $('ammo-res'), wname: $('weapon-name'),
       reload: $('reload-bar'), reloadFill: $('reload-fill'), cross: $('crosshair'), hit: $('hitmarker'), scope: $('scope'),
       flash: $('damage-flash'), indicators: $('dmg-indicators'), scoreA: $('score-a'), scoreB: $('score-b'), timer: $('timer'),
       feed: $('killfeed'), center: $('center-msg'), death: $('death-screen'), killer: $('killer-name'), respawn: $('respawn-timer'),
@@ -34,10 +35,12 @@ export class HUD {
   setCrossVisible(v) { this.el.cross.style.display = v ? 'block' : 'none'; }
   setScope(v) { this.el.scope.classList.toggle('hidden', !v); }
 
-  setHealth(hp) {
+  setHealth(hp, armor = 0) {
     this.el.hp.textContent = Math.max(0, Math.ceil(hp));
     this.el.hpFill.style.width = Math.max(0, hp) + '%';
-    this.el.hpFill.style.background = hp > 60 ? '#5be37d' : hp > 30 ? '#ffc14d' : '#ff4d4d';
+    this.el.hp.parentElement.classList.toggle('low', hp <= 30);
+    this.el.armor.textContent = Math.max(0, Math.ceil(armor));
+    this.el.arFill.style.width = Math.max(0, armor) + '%';
   }
 
   setAmmo(weaponId, ammo) {
@@ -50,7 +53,7 @@ export class HUD {
   }
 
   setSlots(slots, cur) {
-    this.el.slots.innerHTML = slots.map((id, i) => `<div class="slot ${i === cur ? 'on' : ''}"><b>${i + 1}</b>${WEAPONS[id].short}</div>`).join('');
+    this.el.slots.innerHTML = slots.map((id, i) => `<div class="slot ${i === cur ? 'on' : ''}">${iconImg(id)}<b>${i + 1}</b></div>`).join('');
   }
 
   setReload(p) {
@@ -76,6 +79,14 @@ export class HUD {
     setTimeout(() => d.remove(), 900);
   }
 
+  setPips(game) {
+    if (game.cfg.mode === 'ffa') { this.el.pipsA.innerHTML = this.el.pipsB.innerHTML = ''; return; }
+    const html = (t) => game.actors.filter(a => a.team === t).map(a => `<i class="${a.alive ? '' : 'dead'}"></i>`).join('');
+    const ha = html('A'), hb = html('B');
+    if (ha !== this._pa) { this._pa = ha; this.el.pipsA.innerHTML = ha; }
+    if (hb !== this._pb) { this._pb = hb; this.el.pipsB.innerHTML = hb; }
+  }
+
   setScores(a, b, mode, myScore, topScore) {
     if (mode === 'ffa') { this.el.scoreA.textContent = myScore; this.el.scoreB.textContent = topScore; }
     else { this.el.scoreA.textContent = a; this.el.scoreB.textContent = b; }
@@ -90,7 +101,7 @@ export class HUD {
     const row = document.createElement('div');
     row.className = 'kf' + (killerMine || victimMine ? ' mine' : '');
     const w = WEAPONS[weaponId];
-    row.innerHTML = `<span class="t${killerTeam}">${esc(killer)}</span><span class="kw">${w ? w.short : ''}${head ? ' <span class="hs">◉</span>' : ''}</span><span class="t${victimTeam}">${esc(victim)}</span>`;
+    row.innerHTML = `<span class="t${killerTeam}">${esc(killer)}</span>${iconImg(weaponId) || (w ? w.short : '')}${head ? '<span class="hs">◉</span>' : ''}<span class="t${victimTeam}">${esc(victim)}</span>`;
     this.el.feed.prepend(row);
     while (this.el.feed.children.length > 6) this.el.feed.lastChild.remove();
     setTimeout(() => row.classList.add('fade'), 5000);
@@ -103,9 +114,11 @@ export class HUD {
     this.centerT = dur;
   }
 
-  deathScreen(show, killer, seconds) {
+  deathScreen(show, killer, seconds, weaponId) {
     this.el.death.classList.toggle('hidden', !show);
-    if (show) { this.el.killer.textContent = killer || ''; this.el.respawn.textContent = seconds > 0 ? `Возрождение через ${seconds.toFixed(1)}` : ''; }
+    if (show) {
+      if (this._kw !== weaponId) { this._kw = weaponId; this.el.kweapon.innerHTML = weaponId ? iconImg(weaponId) : ''; }
+      this.el.killer.textContent = killer || ''; this.el.respawn.textContent = seconds > 0 ? `Возрождение через ${seconds.toFixed(1)}` : ''; }
   }
 
   scoreboard(show, game) {
@@ -127,44 +140,65 @@ export class HUD {
   // Мини-карта (радар), повёрнута по взгляду игрока
   buildMinimapBase(map) {
     const [x1, z1, x2, z2] = map.def.bounds;
-    const scale = 4; // px на метр в базовом изображении
+    const scale = 6;
     const c = document.createElement('canvas');
     c.width = (x2 - x1) * scale; c.height = (z2 - z1) * scale;
     const ctx = c.getContext('2d');
-    ctx.fillStyle = 'rgba(30,34,40,0.9)'; ctx.fillRect(0, 0, c.width, c.height);
-    for (const col of map.colliders) {
+    ctx.fillStyle = 'rgba(48,54,62,0.95)'; ctx.fillRect(0, 0, c.width, c.height);
+    const list = [...map.colliders].sort((a, b) => a.max[1] - b.max[1]);
+    for (const col of list) {
+      if (col.max[0] < x1 || col.min[0] > x2 || col.max[2] < z1 || col.min[2] > z2) continue;
       const h = col.max[1];
-      ctx.fillStyle = h > 2 ? 'rgba(160,170,180,0.9)' : 'rgba(110,118,126,0.9)';
-      ctx.fillRect((col.min[0] - x1) * scale, (col.min[2] - z1) * scale, (col.max[0] - col.min[0]) * scale, (col.max[2] - col.min[2]) * scale);
+      ctx.fillStyle = h > 2.5 ? '#9aa6b2' : h > 1.3 ? '#6f7a85' : '#5b646d';
+      const rx = (col.min[0] - x1) * scale, rz = (col.min[2] - z1) * scale, rw = (col.max[0] - col.min[0]) * scale, rh = (col.max[2] - col.min[2]) * scale;
+      ctx.fillRect(rx, rz, rw, rh);
+      ctx.strokeStyle = 'rgba(0,0,0,0.35)'; ctx.lineWidth = 1; ctx.strokeRect(rx + 0.5, rz + 0.5, rw - 1, rh - 1);
+    }
+    // зоны возрождения
+    for (const [t, col] of [['A', 'rgba(90,169,255,0.25)'], ['B', 'rgba(255,90,60,0.25)']]) {
+      ctx.fillStyle = col;
+      for (const p of map.def.spawns[t]) { ctx.beginPath(); ctx.arc((p[0] - x1) * scale, (p[1] - z1) * scale, 2.2 * scale, 0, Math.PI * 2); ctx.fill(); }
     }
     this.mmBase = { c, x1, z1, scale };
+    this.el.mapName.textContent = map.def.name;
   }
 
   drawMinimap(game, player) {
     const ctx = this.mm, W = this.el.minimap.width, R = W / 2;
     const base = this.mmBase; if (!base) return;
-    const pxm = 2.2; // пиксели на метр
+    const pxm = 4.4; // пикселей канваса на метр
     ctx.clearRect(0, 0, W, W);
     ctx.save();
-    ctx.beginPath(); ctx.arc(R, R, R - 2, 0, Math.PI * 2); ctx.clip();
-    ctx.fillStyle = 'rgba(10,12,16,0.75)'; ctx.fillRect(0, 0, W, W);
+    ctx.beginPath(); ctx.arc(R, R, R - 3, 0, Math.PI * 2); ctx.clip();
+    ctx.fillStyle = 'rgba(14,17,22,0.85)'; ctx.fillRect(0, 0, W, W);
     ctx.translate(R, R); ctx.rotate(player.yaw); ctx.scale(pxm / base.scale, pxm / base.scale);
     ctx.translate(-(player.pos.x - base.x1) * base.scale, -(player.pos.z - base.z1) * base.scale);
+    ctx.globalAlpha = 0.95;
     ctx.drawImage(base.c, 0, 0);
-    // точки
+    ctx.globalAlpha = 1;
+    const r = 4.2 * base.scale / pxm;
     for (const a of game.actors) {
       if (a === player || !a.alive) continue;
       const enemy = game.isEnemy(player, a);
       if (enemy && game.time > a.spottedUntil) continue;
-      ctx.fillStyle = enemy ? '#ff4040' : '#4da3ff';
-      ctx.beginPath(); ctx.arc((a.pos.x - base.x1) * base.scale, (a.pos.z - base.z1) * base.scale, 2.4 * base.scale / pxm * 1.0, 0, Math.PI * 2); ctx.fill();
+      const x = (a.pos.x - base.x1) * base.scale, y = (a.pos.z - base.z1) * base.scale;
+      ctx.fillStyle = enemy ? '#ff4433' : '#5aa9ff';
+      ctx.strokeStyle = '#000'; ctx.lineWidth = r * 0.35;
+      ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+      if (!enemy) { // направление взгляда союзника
+        ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x - Math.sin(a.yaw) * r * 2.4, y - Math.cos(a.yaw) * r * 2.4); ctx.strokeStyle = '#5aa9ff'; ctx.stroke();
+      }
     }
     ctx.restore();
-    // игрок — стрелка в центре
-    ctx.fillStyle = '#fff';
-    ctx.beginPath(); ctx.moveTo(R, R - 7); ctx.lineTo(R + 5, R + 5); ctx.lineTo(R, R + 2); ctx.lineTo(R - 5, R + 5); ctx.closePath(); ctx.fill();
-    ctx.strokeStyle = 'rgba(255,255,255,0.25)'; ctx.lineWidth = 2;
-    ctx.beginPath(); ctx.arc(R, R, R - 2, 0, Math.PI * 2); ctx.stroke();
+    // конус обзора и стрелка игрока
+    const g = ctx.createRadialGradient(R, R, 0, R, R, R * 0.7);
+    g.addColorStop(0, 'rgba(255,255,255,0.18)'); g.addColorStop(1, 'rgba(255,255,255,0)');
+    ctx.fillStyle = g;
+    ctx.beginPath(); ctx.moveTo(R, R); ctx.arc(R, R, R * 0.7, -Math.PI / 2 - 0.6, -Math.PI / 2 + 0.6); ctx.closePath(); ctx.fill();
+    ctx.fillStyle = '#fff'; ctx.strokeStyle = '#000'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(R, R - 12); ctx.lineTo(R + 8, R + 8); ctx.lineTo(R, R + 3); ctx.lineTo(R - 8, R + 8); ctx.closePath(); ctx.stroke(); ctx.fill();
+    ctx.strokeStyle = 'rgba(255,255,255,0.3)'; ctx.lineWidth = 3;
+    ctx.beginPath(); ctx.arc(R, R, R - 3, 0, Math.PI * 2); ctx.stroke();
   }
 
   update(dt, fps) {

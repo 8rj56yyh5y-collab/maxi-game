@@ -11,7 +11,7 @@ export const DEFAULT_LAYOUT = {
   crouch:   { x: 91, y: 86, size: 60,  opacity: 0.5 },
   reload:   { x: 76, y: 44, size: 54,  opacity: 0.5 },
   weapon:   { x: 50, y: 88, size: 58,  opacity: 0.5 },
-  score:    { x: 64, y: 7,  size: 44,  opacity: 0.5 },
+  score:    { x: 76, y: 8,  size: 44,  opacity: 0.5 },
   pause:    { x: 96, y: 8,  size: 44,  opacity: 0.5 },
 };
 
@@ -29,6 +29,7 @@ const DEFAULTS = {
   fov: 80,
   quality: 'medium',  // low | medium | high
   renderScale: 1.0,
+  fpsCap: 0,          // 0 — без лимита (по частоте экрана)
   showFps: true,
   volume: 0.6,
   aimToggle: true,    // прицел по нажатию (сенсор)
@@ -48,9 +49,11 @@ function deepMerge(base, over) {
   return out;
 }
 
+export let hadSavedSettings = false;
 function load() {
   try {
     const raw = localStorage.getItem(KEY);
+    hadSavedSettings = !!raw;
     if (raw) return deepMerge(DEFAULTS, JSON.parse(raw));
   } catch (e) { /* приватный режим и т.п. */ }
   return deepMerge(DEFAULTS, {});

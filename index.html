@@ -5,11 +5,13 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
-<meta name="theme-color" content="#0b0f14">
+<meta name="theme-color" content="#07090c">
 <title>MAXI STRIKE</title>
 <link rel="manifest" href="manifest.json">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@500;600;700&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="css/style.css">
-<script type="importmap">{ "imports": { "three": "./lib/three.module.min.js" } }</script>
+<script type="importmap">{ "imports": { "three": "./lib/three.module.min.js", "three/addons/": "./lib/addons/" } }</script>
 </head>
 <body>
 <canvas id="game"></canvas>
@@ -18,25 +20,29 @@
 <div id="hud" class="hidden">
   <div id="crosshair"><i class="t"></i><i class="b"></i><i class="l"></i><i class="r"></i><i class="d"></i></div>
   <div id="hitmarker"></div>
-  <div id="scope" class="hidden"></div>
+  <div id="scope" class="hidden"><div class="scope-lines"></div></div>
   <div id="damage-flash"></div>
   <div id="dmg-indicators"></div>
-  <div id="topbar"><div class="score a" id="score-a">0</div><div id="timer">8:00</div><div class="score b" id="score-b">0</div></div>
-  <canvas id="minimap" width="150" height="150"></canvas>
+  <div id="topbar">
+    <div class="team-side a"><div class="pips" id="pips-a"></div><div class="score" id="score-a">0</div></div>
+    <div class="mid"><div id="timer">8:00</div><div id="goal"></div></div>
+    <div class="team-side b"><div class="score" id="score-b">0</div><div class="pips" id="pips-b"></div></div>
+  </div>
+  <div id="radar-wrap"><canvas id="minimap" width="300" height="300"></canvas><div id="radar-map-name"></div></div>
   <div id="killfeed"></div>
-  <div id="bottom-left">
-    <div id="hp-box"><span class="icon">✚</span><span id="hp">100</span></div>
-    <div id="hp-bar"><div id="hp-fill"></div></div>
+  <div id="vitals">
+    <div class="vital hp"><svg viewBox="0 0 24 24"><path d="M9 3h6v6h6v6h-6v6H9v-6H3V9h6z" fill="currentColor"/></svg><span id="hp">100</span><div class="bar"><i id="hp-fill"></i></div></div>
+    <div class="vital ar"><svg viewBox="0 0 24 24"><path d="M12 2l8 3v6c0 5-3.4 9.4-8 11-4.6-1.6-8-6-8-11V5z" fill="currentColor"/></svg><span id="armor">100</span><div class="bar"><i id="ar-fill"></i></div></div>
     <div id="protect">Защита при возрождении</div>
   </div>
-  <div id="bottom-right">
+  <div id="weapon-panel">
     <div id="weapon-slots"></div>
+    <div class="ammo-row"><div id="ammo"><span id="ammo-mag">30</span><span id="ammo-res">/ 90</span></div></div>
     <div id="weapon-name"></div>
-    <div id="ammo"><span id="ammo-mag">30</span><span id="ammo-res">/ 90</span></div>
     <div id="reload-bar"><div id="reload-fill"></div></div>
   </div>
   <div id="center-msg"></div>
-  <div id="death-screen" class="hidden"><div class="killed-by">Вас убил <b id="killer-name"></b></div><div id="respawn-timer"></div></div>
+  <div id="death-screen" class="hidden"><div class="killed-by"><small>ВАС УБИЛ</small><b id="killer-name"></b><span id="killer-weapon"></span></div><div id="respawn-timer"></div></div>
   <div id="scoreboard" class="hidden"></div>
   <div id="fps"></div>
   <div id="touch-ui"></div>
@@ -44,59 +50,85 @@
 
 <!-- ============ МЕНЮ ============ -->
 <div id="menu">
-  <div class="topline">
+  <header class="nav">
     <div class="logo">MAXI<span>STRIKE</span></div>
-    <div class="credits"><span class="coin">◆</span><span id="credits">0</span></div>
-  </div>
-
-  <!-- Главный экран -->
-  <section class="screen active" id="screen-main">
-    <div class="main-buttons">
-      <button class="big primary" data-goto="play">ИГРАТЬ</button>
-      <button class="big" data-goto="arsenal">АРСЕНАЛ</button>
-      <button class="big" data-goto="cases">КЕЙСЫ</button>
-      <button class="big" data-goto="settings">НАСТРОЙКИ</button>
+    <nav id="nav">
+      <button data-goto="main" class="on">Главная</button>
+      <button data-goto="arsenal">Арсенал</button>
+      <button data-goto="cases">Кейсы</button>
+      <button data-goto="settings">Настройки</button>
+    </nav>
+    <div class="nav-right">
+      <div class="credits"><span class="coin">◆</span><span id="credits">0</span></div>
+      <div class="player-chip"><div class="avatar">M</div><div><b>Игрок</b><small id="lvl-text">Уровень 1</small><div class="xp"><i id="xp-fill"></i></div></div></div>
     </div>
-    <div class="profile-card" id="profile-card"></div>
+  </header>
+
+  <!-- Лобби -->
+  <section class="screen active" id="screen-main">
+    <div class="lobby-left">
+      <div class="card stats-card">
+        <div class="card-title">Статистика</div>
+        <div class="stat-grid" id="profile-card"></div>
+      </div>
+      <div class="card tips">
+        <div class="card-title">Управление (ПК)</div>
+        <div class="keys">
+          <span><kbd>WASD</kbd>движение</span><span><kbd>ЛКМ</kbd>огонь</span><span><kbd>ПКМ</kbd>прицел</span>
+          <span><kbd>R</kbd>перезарядка</span><span><kbd>Пробел</kbd>прыжок</span><span><kbd>Ctrl</kbd>присед</span>
+          <span><kbd>1-3</kbd>оружие</span><span><kbd>Tab</kbd>счёт</span><span><kbd>Esc</kbd>пауза</span>
+        </div>
+      </div>
+    </div>
+    <div class="lobby-play">
+      <div class="match-summary" id="match-summary"></div>
+      <div class="play-row">
+        <button class="ghost" data-goto="play">Настроить матч</button>
+        <button class="play-btn" id="quick-play">В БОЙ</button>
+      </div>
+    </div>
   </section>
 
   <!-- Настройка матча -->
   <section class="screen" id="screen-play">
-    <div class="panel">
-      <h2><button class="back" data-goto="main">‹</button>Бой с ботами</h2>
-      <div class="row"><label>Режим</label><div class="seg" data-opt="mode"></div></div>
-      <div class="row"><label>Карта</label><div class="maps" id="map-cards"></div></div>
-      <div class="row"><label id="per-team-label">Игроков в команде</label><div class="seg" data-opt="perTeam"></div></div>
-      <div class="row"><label>Сложность ботов</label><div class="seg" data-opt="difficulty"></div></div>
-      <div class="row"><label>Основное оружие</label><div class="seg" data-opt="primary"></div></div>
-      <div class="row"><label>Убийств до победы</label><div class="seg" data-opt="killsToWin"></div></div>
-      <div class="row"><label>Время матча</label><div class="seg" data-opt="minutes"></div></div>
-      <button class="big primary wide" id="start-btn">В БОЙ</button>
+    <div class="panel wide">
+      <div class="panel-head"><h2>Бой с ботами</h2><button class="close" data-goto="main">✕</button></div>
+      <div class="maps" id="map-cards"></div>
+      <div class="opts">
+        <div class="row"><label>Режим</label><div class="seg" data-opt="mode"></div></div>
+        <div class="row"><label id="per-team-label">Игроков в команде</label><div class="seg" data-opt="perTeam"></div></div>
+        <div class="row"><label>Сложность ботов</label><div class="seg" data-opt="difficulty"></div></div>
+        <div class="row"><label>Основное оружие</label><div class="seg weapons" data-opt="primary"></div></div>
+        <div class="row"><label>Убийств до победы</label><div class="seg" data-opt="killsToWin"></div></div>
+        <div class="row"><label>Время матча</label><div class="seg" data-opt="minutes"></div></div>
+      </div>
+      <button class="play-btn wide" id="start-btn">В БОЙ</button>
     </div>
   </section>
 
-  <!-- Арсенал (скины) -->
+  <!-- Арсенал -->
   <section class="screen" id="screen-arsenal">
     <div class="panel side">
-      <h2><button class="back" data-goto="main">‹</button>Арсенал</h2>
-      <div class="tabs" id="arsenal-tabs"></div>
+      <div class="panel-head"><h2>Арсенал</h2></div>
+      <div class="tabs weapon-tabs" id="arsenal-tabs"></div>
       <div class="skin-grid" id="skin-grid"></div>
     </div>
+    <div class="skin-info" id="skin-info"></div>
   </section>
 
   <!-- Кейсы -->
   <section class="screen" id="screen-cases">
-    <div class="panel">
-      <h2><button class="back" data-goto="main">‹</button>Кейсы</h2>
-      <p class="hint">Кредиты ◆ дают за убийства и победы. Повторный скин автоматически продаётся.</p>
+    <div class="panel wide">
+      <div class="panel-head"><h2>Кейсы</h2></div>
+      <p class="hint">Кредиты ◆ дают за убийства, хедшоты и победы. Повторный скин автоматически продаётся.</p>
       <div class="case-list" id="case-list"></div>
     </div>
   </section>
 
   <!-- Настройки -->
   <section class="screen" id="screen-settings">
-    <div class="panel">
-      <h2><button class="back" data-goto="main">‹</button>Настройки</h2>
+    <div class="panel wide">
+      <div class="panel-head"><h2>Настройки</h2></div>
       <div class="tabs" id="settings-tabs"></div>
       <div id="settings-body"></div>
     </div>
@@ -105,29 +137,30 @@
 
 <!-- Открытие кейса -->
 <div id="case-open" class="overlay hidden">
+  <div class="case-open-title" id="case-open-title"></div>
   <div class="roulette"><div class="strip" id="roulette-strip"></div><div class="marker"></div></div>
   <div class="case-result" id="case-result"></div>
-  <button class="big primary" id="case-close">Забрать</button>
+  <button class="play-btn" id="case-close">Забрать</button>
 </div>
 
 <!-- Пауза -->
 <div id="pause" class="overlay hidden">
   <div class="panel small">
-    <h2>Пауза</h2>
-    <button class="big primary wide" id="resume-btn">Продолжить</button>
-    <button class="big wide" id="pause-settings">Настройки</button>
-    <button class="big wide danger" id="quit-btn">Выйти в меню</button>
+    <div class="panel-head"><h2>Пауза</h2></div>
+    <button class="menu-btn primary" id="resume-btn">Продолжить</button>
+    <button class="menu-btn" id="pause-settings">Настройки</button>
+    <button class="menu-btn danger" id="quit-btn">Выйти в меню</button>
     <p class="hint" id="pause-hint"></p>
   </div>
 </div>
 
-<!-- Итоги матча -->
+<!-- Итоги -->
 <div id="end" class="overlay hidden">
-  <div class="panel">
+  <div class="panel end-panel">
     <h2 id="end-title">Победа</h2>
+    <div id="end-score"></div>
     <div id="end-stats"></div>
-    <button class="big primary wide" id="end-again">Ещё раз</button>
-    <button class="big wide" id="end-menu">В меню</button>
+    <div class="end-buttons"><button class="menu-btn" id="end-menu">В меню</button><button class="play-btn" id="end-again">Ещё раз</button></div>
   </div>
 </div>
 
@@ -144,7 +177,7 @@
 </div>
 
 <div id="rotate-hint">Поверните устройство горизонтально ⟲</div>
-<div id="loading">Загрузка…</div>
+<div id="loading"><div class="logo">MAXI<span>STRIKE</span></div><div class="load-bar"><i></i></div><div id="load-text">Загрузка…</div></div>
 
 <script type="module" src="js/main.js"></script>
 </body>

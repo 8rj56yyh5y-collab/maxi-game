@@ -90,7 +90,7 @@ export class Input {
     if (this.touch) return;
     try {
       const p = this.canvas.requestPointerLock({ unadjustedMovement: true });
-      if (p && p.catch) p.catch(() => { try { this.canvas.requestPointerLock(); } catch (e) { /* ignore */ } });
+      if (p && p.catch) p.catch(() => { try { const p2 = this.canvas.requestPointerLock(); if (p2 && p2.catch) p2.catch(() => {}); } catch (e) { /* ignore */ } });
     } catch (e) { try { this.canvas.requestPointerLock(); } catch (e2) { /* ignore */ } }
   }
 
