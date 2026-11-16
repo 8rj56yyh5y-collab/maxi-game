@@ -501,10 +501,37 @@ export function skinCanvas(skin, size = 256) {
   return c;
 }
 
+// Износ краски: потёртости и царапины до металла; чем выше редкость, тем «новее» скин
+const WEAR = { common: 0.55, rare: 0.4, epic: 0.25, legendary: 0.12, mythic: 0.04 };
+function addWear(cv, skin) {
+  const ctx = cv.getContext('2d'), S = cv.width, r = rng(strHash(skin.id + 'w')), w = WEAR[skin.rarity] ?? 0.3;
+  // мелкие сколы
+  for (let i = 0; i < 260 * w; i++) {
+    const x = r() * S, y = r() * S, rr = (1 + r() * 4) * S / 512;
+    ctx.fillStyle = `rgba(${150 + r() * 40},${152 + r() * 40},${158 + r() * 40},${0.5 + r() * 0.4})`;
+    ctx.beginPath(); ctx.ellipse(x, y, rr * (1 + r() * 2), rr, r() * 3, 0, Math.PI * 2); ctx.fill();
+  }
+  // царапины
+  ctx.lineCap = 'round';
+  for (let i = 0; i < 80 * w; i++) {
+    const x = r() * S, y = r() * S, len = (10 + r() * 50) * S / 512, a = r() * Math.PI;
+    ctx.strokeStyle = `rgba(200,205,210,${0.15 + r() * 0.3})`; ctx.lineWidth = (0.5 + r()) * S / 512;
+    ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x + Math.cos(a) * len, y + Math.sin(a) * len); ctx.stroke();
+  }
+  // лёгкая грязь и неравномерность покраски
+  for (let i = 0; i < 40; i++) {
+    const g = ctx.createRadialGradient(r() * S, r() * S, 0, r() * S, r() * S, (40 + r() * 90) * S / 512);
+    g.addColorStop(0, `rgba(0,0,0,${0.06 * (0.4 + w)})`); g.addColorStop(1, 'rgba(0,0,0,0)');
+    ctx.fillStyle = g; ctx.fillRect(0, 0, S, S);
+  }
+}
+
 const skinTexCache = new Map();
 export function skinTexture(skin) {
   if (skinTexCache.has(skin.id)) return skinTexCache.get(skin.id);
-  const t = new THREE.CanvasTexture(skinCanvas(skin, 512));
+  const cv = skinCanvas(skin, 512);
+  if (skin.pattern !== 'art' && skin.pattern !== 'knife') addWear(cv, skin);
+  const t = new THREE.CanvasTexture(cv);
   if (skin.pattern === 'art') { t.repeat.set(0.36, 0.95); t.offset.set(0.02, 0.0); }
   t.wrapS = t.wrapT = THREE.RepeatWrapping;
   t.colorSpace = THREE.SRGBColorSpace;

@@ -51,9 +51,12 @@ export function skinMaterial(skin) {
   if (!skin) return null;
   if (skinMatCache.has(skin.id)) return skinMatCache.get(skin.id);
   const t = skinTexture(skin);
-  const m = new THREE.MeshStandardMaterial({
-    map: t, metalness: 0.35, roughness: 0.42,
-    normalMap: texSet('metal2').normalMap, normalScale: new THREE.Vector2(0.25, 0.25),
+  const gm = texSet('gun_metal');
+  // краска под лаком: глянец, отражения окружения, микроцарапины металла под ней
+  const m = new THREE.MeshPhysicalMaterial({
+    map: t, metalness: 0.3, roughness: 0.5, roughnessMap: gm.roughnessMap,
+    normalMap: gm.normalMap, normalScale: new THREE.Vector2(0.35, 0.35),
+    clearcoat: skin.pattern === 'knife' ? 0 : 0.75, clearcoatRoughness: 0.18, envMapIntensity: 1.2,
     emissive: skin.glow ? new THREE.Color(skin.glow) : 0x000000, emissiveMap: skin.glow ? t : null, emissiveIntensity: skin.glow ? 0.45 : 0,
   });
   if (skin.pattern === 'art') {
