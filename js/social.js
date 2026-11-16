@@ -84,7 +84,7 @@ export function createClan({ name, tag, motto, icon, color }) {
   if (/[^\x20-\x7e]/.test(motto || '')) motto = '';
   if (name.length < 3) throw new Error('Название клана — от 3 латинских символов');
   if (tag.length < 2) throw new Error('Тег клана — от 2 латинских букв или цифр');
-  profile.clan = { name, tag, motto: (motto || '').slice(0, 60), icon: icon || 'shield', color: color || 0, level: 1, xp: 0, created: Date.now(), role: 'leader',
+  profile.clan = { name, tag, motto: (motto || '').slice(0, 60), icon: icon || 'shield', color: color || 0, level: 1, xp: 0, created: Date.now(), role: 'leader', own: true,
     members: genMembers(Date.now() % 100000, 3).map((m, i) => ({ ...m, role: i === 0 ? 'officer' : 'recruit' })), log: [{ t: Date.now(), text: `Clan ${name} founded` }] };
   saveProfile();
   return profile.clan;
@@ -106,3 +106,39 @@ export function clanMatchXp(won, kills) {
   return xp;
 }
 export function clanTag() { return profile.clan ? `[${profile.clan.tag}] ` : ''; }
+
+// ---------- Клановые битвы ----------
+// Сезон клановых битв: рейтинг клана (CWR), соперники, история боёв.
+export function cwState() {
+  const c = profile.clan; if (!c) return null;
+  if (!c.cw) c.cw = { rating: 1000, wins: 0, losses: 0, streak: 0, history: [], season: cwSeason() };
+  if (c.cw.season !== cwSeason()) { c.cw.rating = Math.round(1000 + (c.cw.rating - 1000) * 0.5); c.cw.wins = c.cw.losses = c.cw.streak = 0; c.cw.season = cwSeason(); }
+  return c.cw;
+}
+export function cwSeason() { const d = new Date(); return d.getUTCFullYear() * 100 + Math.floor(d.getUTCMonth()); }
+// Соперники: кланы-NPC и кланы игроков, с рейтингом, который «живёт» по дням
+export function cwOpponents(extra = []) {
+  const day = Math.floor(Date.now() / 864e5);
+  const all = [...CLAN_LIST.map(k => ({ ...k, npc: true })), ...extra.map(k => ({ ...k, npc: false }))].filter(k => !profile.clan || k.tag !== profile.clan.tag);
+  return all.map(k => {
+    const R = rnd(k.tag.split('').reduce((a, ch) => a * 31 + ch.charCodeAt(0), day) >>> 0);
+    const rating = Math.round(900 + (k.level || 5) * 22 + R() * 160);
+    return { ...k, rating, roster: genMembers(k.tag.length * 1301 + (k.level || 1), 5).map(m => m.name) };
+  }).sort((a, b) => b.rating - a.rating);
+}
+export function cwDifficulty(opp) { return opp.rating < 1050 ? 'easy' : opp.rating < 1250 ? 'normal' : 'hard'; }
+// Итог боя: изменение рейтинга по Эло
+export function cwApply(opp, win, draw, score) {
+  const s = cwState(); if (!s) return null;
+  const exp = 1 / (1 + Math.pow(10, (opp.rating - s.rating) / 400));
+  const delta = Math.round(40 * ((draw ? 0.5 : win ? 1 : 0) - exp));
+  s.rating = Math.max(0, s.rating + delta);
+  if (win) { s.wins++; s.streak = Math.max(1, s.streak + 1); } else if (!draw) { s.losses++; s.streak = Math.min(-1, s.streak - 1); }
+  s.history = [{ t: Date.now(), opp: opp.name, tag: opp.tag, win, draw, score, delta }, ...s.history].slice(0, 20);
+  profile.clan.log.push({ t: Date.now(), text: `Clan war vs [${opp.tag}] ${opp.name}: ${draw ? 'draw' : win ? 'victory' : 'defeat'} ${score} (${delta >= 0 ? '+' : ''}${delta} CWR)` });
+  if (profile.clan.log.length > 30) profile.clan.log.splice(0, profile.clan.log.length - 30);
+  saveProfile();
+  return { delta, rating: s.rating };
+}
+export const CW_LEAGUES = [[0, 'Bronze', '#c07a45'], [1050, 'Silver', '#c6ced8'], [1200, 'Gold', '#ffc23d'], [1350, 'Platinum', '#5ee6d0'], [1500, 'Diamond', '#7ab8ff'], [1700, 'Champions', '#ff5ec4']];
+export function cwLeague(r) { let L = CW_LEAGUES[0]; for (const l of CW_LEAGUES) if (r >= l[0]) L = l; return { name: L[1], color: L[2] }; }

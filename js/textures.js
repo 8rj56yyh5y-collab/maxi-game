@@ -503,8 +503,36 @@ export function skinCanvas(skin, size = 256) {
 
 // Износ краски: потёртости и царапины до металла; чем выше редкость, тем «новее» скин
 const WEAR = { common: 0.55, rare: 0.4, epic: 0.25, legendary: 0.12, mythic: 0.04 };
+// Экземпляр скина (float износа, номер узора) — подставляет main.js
+let instResolver = () => null;
+export function setInstanceResolver(fn) { instResolver = fn; skinTexCache.clear(); }
+// Редкий узор: золотая инкрустация / синий перелив поверх рисунка
+function addSpecial(cv, sp, seed) {
+  const ctx = cv.getContext('2d'), S = cv.width, r = rng(seed * 7919);
+  ctx.save();
+  if (sp.key === 'gold' || sp.key === 'clean') {
+    ctx.globalCompositeOperation = 'source-over'; ctx.lineCap = 'round';
+    for (let i = 0; i < (sp.key === 'gold' ? 14 : 6); i++) {
+      let x = r() * S, y = r() * S, a = r() * 6.28;
+      const g = ctx.createLinearGradient(x - 60, y, x + 60, y);
+      g.addColorStop(0, sp.key === 'gold' ? '#7a5200' : '#9fdcff'); g.addColorStop(0.5, sp.key === 'gold' ? '#ffe28a' : '#ffffff'); g.addColorStop(1, sp.key === 'gold' ? '#b8860b' : '#9fdcff');
+      ctx.strokeStyle = g; ctx.lineWidth = (1.5 + r() * 2.5) * S / 512; ctx.beginPath(); ctx.moveTo(x, y);
+      for (let k = 0; k < 9; k++) { a += (r() - 0.5) * 1.6; const nx = x + Math.cos(a) * 26 * S / 512, ny = y + Math.sin(a) * 26 * S / 512; ctx.quadraticCurveTo(x + Math.cos(a + 1) * 12, y + Math.sin(a + 1) * 12, nx, ny); x = nx; y = ny; }
+      ctx.stroke();
+    }
+  } else {
+    ctx.globalCompositeOperation = 'overlay';
+    const g = ctx.createLinearGradient(0, 0, S, S); g.addColorStop(0, '#1d5cff'); g.addColorStop(0.5, '#69d2ff'); g.addColorStop(1, '#1a2bff');
+    ctx.fillStyle = g; ctx.globalAlpha = 0.75; ctx.fillRect(0, 0, S, S);
+  }
+  ctx.restore();
+}
+
 function addWear(cv, skin) {
-  const ctx = cv.getContext('2d'), S = cv.width, r = rng(strHash(skin.id + 'w')), w = WEAR[skin.rarity] ?? 0.3;
+  const inst = instResolver(skin.id);
+  const ctx = cv.getContext('2d'), S = cv.width, r = rng(strHash(skin.id + 'w') + (inst ? inst.seed * 131 : 0));
+  // износ: float экземпляра 0…1 → сила потёртостей 0.03…0.9
+  const w = inst ? 0.03 + Math.pow(inst.f, 0.8) * 0.95 : (WEAR[skin.rarity] ?? 0.3);
   // мелкие сколы
   for (let i = 0; i < 260 * w; i++) {
     const x = r() * S, y = r() * S, rr = (1 + r() * 4) * S / 512;
@@ -530,9 +558,12 @@ const skinTexCache = new Map();
 export function skinTexture(skin) {
   if (skinTexCache.has(skin.id)) return skinTexCache.get(skin.id);
   const cv = skinCanvas(skin, 512);
+  const inst = instResolver(skin.id);
+  if (inst && inst.special) addSpecial(cv, inst.special, inst.seed);
   if (skin.pattern !== 'art' && skin.pattern !== 'knife') addWear(cv, skin);
   const t = new THREE.CanvasTexture(cv);
   if (skin.pattern === 'art') { t.repeat.set(0.36, 0.95); t.offset.set(0.02, 0.0); }
+  else if (inst) t.offset.set((inst.seed * 0.618) % 1, (inst.seed * 0.382) % 1);   // номер узора сдвигает рисунок
   t.wrapS = t.wrapT = THREE.RepeatWrapping;
   t.colorSpace = THREE.SRGBColorSpace;
   t.anisotropy = 4;

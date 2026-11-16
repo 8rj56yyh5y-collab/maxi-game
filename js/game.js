@@ -115,9 +115,10 @@ export class Game {
     const names = [...BOT_NAMES].sort(() => Math.random() - 0.5);
     let ni = 0, ffa = 0;
     const playerTeam = this.cfg.side === 'B' ? 'B' : this.cfg.side === 'A' ? 'A' : (Math.random() < 0.5 ? 'A' : 'B');
+    this._pTeam = playerTeam;
     const mk = (team, isPlayer) => {
       const a = {
-        id: this.actors.length, name: isPlayer ? (settings.matchName || settings.nickname || 'Player') : names[ni++ % names.length], team, isPlayer,
+        id: this.actors.length, name: isPlayer ? (settings.matchName || settings.nickname || 'Player') : this.botName(team, names, ni++), team, isPlayer,
         pos: new THREE.Vector3(), vel: new THREE.Vector3(), yaw: 0, pitch: 0,
         radius: 0.35, height: 1.8, onGround: true, crouchT: 0,
         health: 100, armor: 0, helmet: false, defuseKit: false, alive: false,
@@ -148,6 +149,18 @@ export class Game {
       for (let i = 0; i < perTeam - 1; i++) mk(playerTeam, false);
       for (let i = 0; i < perTeam; i++) mk(other, false);
     }
+  }
+
+  // Имена ботов: в клановой битве — составы кланов с тегами
+  botName(team, names, i) {
+    const cw = this.cfg.clanWar;
+    if (cw) {
+      const side = team === this._pTeam ? cw.ally : cw.enemy;
+      const k = (side._i = (side._i || 0) + 1) - 1;
+      const n = side.names[k % side.names.length] || names[i % names.length];
+      return `[${side.tag}] ${n}`;
+    }
+    return names[i % names.length];
   }
 
   isEnemy(a, b) { return a !== b && (a.team === 'F' || a.team !== b.team); }

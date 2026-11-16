@@ -272,10 +272,12 @@ export class ViewModel {
     solveIK(B.rArm, B.rFore, B.rHand, tR, new THREE.Vector3(0.7, -1, 0.3), this.armLen.ua, this.armLen.fa);
     const gq = this.gun.getWorldQuaternion(new THREE.Quaternion());
     const gLeft = new THREE.Vector3(-1, 0, 0).applyQuaternion(gq), gDown = new THREE.Vector3(0, -1, 0).applyQuaternion(gq), gFwd = new THREE.Vector3(0, 0, -1).applyQuaternion(gq);
-    aimBone(B.rHand, B.rFing.getWorldPosition(new THREE.Vector3()), tR.clone().addScaledVector(gLeft, 0.1).addScaledVector(gDown, 0.05).addScaledVector(gFwd, 0.03));
+    // кисть: пальцы обхватывают рукоять (у ножа — плотнее и вниз)
+    if (this.cat === 'knife') aimBone(B.rHand, B.rFing.getWorldPosition(new THREE.Vector3()), tR.clone().addScaledVector(gLeft, 0.07).addScaledVector(gDown, 0.09).addScaledVector(gFwd, -0.01));
+    else aimBone(B.rHand, B.rFing.getWorldPosition(new THREE.Vector3()), tR.clone().addScaledVector(gLeft, 0.1).addScaledVector(gDown, 0.05).addScaledVector(gFwd, 0.03));
     let tL;
     if (ud.gripL) tL = this.gun.localToWorld(ud.gripL.clone()).add(this.leftOffset);
-    else tL = new THREE.Vector3(-0.32, -0.55, -0.05);
+    else tL = new THREE.Vector3(-0.42, -0.85, 0.05);   // свободная рука опущена и не мешает обзору
     solveIK(B.lArm, B.lFore, B.lHand, tL, new THREE.Vector3(-0.8, -1, 0.2), this.armLen.ua, this.armLen.fa);
     if (ud.gripL) aimBone(B.lHand, B.lFing.getWorldPosition(new THREE.Vector3()), tL.clone().addScaledVector(gLeft, -0.1).addScaledVector(gFwd, 0.04));
     void right;

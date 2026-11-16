@@ -126,14 +126,15 @@ export function openCase(c) {
   return { skin, duplicate };
 }
 
-export function sellSkin(id) {
+export function sellSkin(id, price) {
   const i = profile.owned.indexOf(id);
   if (i < 0) return 0;
   const s = SKINS[id];
   profile.owned.splice(i, 1);
   for (const [w, sid] of Object.entries(profile.equipped)) if (sid === id) delete profile.equipped[w];
   if (KNIVES[s.weapon] && profile.knife === s.weapon && !ownedKnives().includes(s.weapon)) profile.knife = 'knife';
-  const v = RARITY[s.rarity].sell * 10;
+  const v = price || RARITY[s.rarity].sell * 10;
+  if (profile.items) delete profile.items[id];
   profile.credits += v;
   saveProfile();
   return v;

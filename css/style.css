@@ -567,3 +567,41 @@ body.can-use .tbtn[data-btn=use] { display: flex; }
 #loading .load-bar i::after { content: ''; position: absolute; right: 0; top: 0; bottom: 0; width: 60px; background: linear-gradient(90deg, transparent, rgba(255,255,255,.8)); }
 .ld-row { display: flex; justify-content: space-between; margin-top: 8px; color: var(--muted); font-size: 12.5px; letter-spacing: 1px; text-transform: uppercase; }
 #ld-pct { font-family: var(--head); font-weight: 700; color: #fff; font-size: 15px; }
+/* Клановые битвы */
+.cw-card { margin-bottom: 12px; background: linear-gradient(135deg, rgba(255,194,61,.08), rgba(20,28,40,.7)); border: 1px solid rgba(255,194,61,.25); }
+.cw-head { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-bottom: 10px; }
+.cw-rating { font-size: 22px; font-weight: 800; letter-spacing: .5px; } .cw-rating span { color: #fff; opacity: .85; font-size: 16px; margin-left: 6px; }
+.cw-cols { display: grid; grid-template-columns: 1.4fr 1fr; gap: 14px; }
+.cw-ladder, .cw-hist { display: flex; flex-direction: column; gap: 4px; max-height: 300px; overflow: auto; }
+.cw-row { display: grid; grid-template-columns: 24px 30px 1fr auto auto; align-items: center; gap: 8px; padding: 5px 8px; border-radius: 8px; background: rgba(255,255,255,.04); }
+.cw-row.me { background: rgba(255,194,61,.16); outline: 1px solid rgba(255,194,61,.5); }
+.cw-row b { font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; } .cw-row b small { opacity: .6; }
+.cw-pos { font-weight: 800; opacity: .7; text-align: center; } .cw-r { font-weight: 800; font-variant-numeric: tabular-nums; }
+.cw-row .btn { padding: 4px 10px; font-size: 12px; } .cw-you { font-size: 11px; font-weight: 800; color: var(--gold); padding: 0 6px; }
+.cw-h { display: grid; grid-template-columns: 22px 1fr auto; gap: 8px; align-items: center; padding: 5px 8px; border-radius: 8px; background: rgba(255,255,255,.04); font-size: 13px; }
+.cw-h b { width: 22px; height: 22px; border-radius: 6px; display: grid; place-items: center; background: #555; font-size: 11px; }
+.cw-h.w b { background: var(--ok); color: #031; } .cw-h.l b { background: var(--danger); }
+@media (max-width: 760px) { .cw-cols { grid-template-columns: 1fr; } }
+/* Экземпляр скина: отделка, износ, узор, ценность */
+.inst { margin: 10px 0 4px; padding: 10px 12px; border-radius: 10px; background: rgba(0,0,0,.28); border: 1px solid rgba(255,255,255,.08); display: flex; flex-direction: column; gap: 5px; }
+.inst-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; font-size: 13px; }
+.inst-row small { opacity: .6; } .inst-row b { font-weight: 700; } .inst-row .mono { font-family: ui-monospace, monospace; }
+.inst-row b { color: #ffd76a; } .inst-row b .dimstar { color: rgba(255,255,255,.18); margin-right: 4px; }
+.inst-row:not(:first-child) b { color: #fff; }
+.inst-why { margin: 0 0 4px; font-size: 12px; opacity: .72; line-height: 1.4; }
+.wtag { font-size: 10px; padding: 1px 5px; border-radius: 4px; background: rgba(255,255,255,.12); margin-left: 4px; }
+.float-bar { position: relative; height: 6px; border-radius: 3px; background: linear-gradient(90deg, #2ecc71 0 7%, #8bd346 7% 15%, #f1c40f 15% 38%, #e67e22 38% 45%, #e74c3c 45%); }
+.float-bar i { position: absolute; top: -4px; width: 3px; height: 14px; background: #fff; border-radius: 2px; box-shadow: 0 0 6px #000; transform: translateX(-50%); }
+.sp-tag { font-size: 11px; font-weight: 800; padding: 2px 7px; border-radius: 10px; color: #111; background: var(--sc); box-shadow: 0 0 12px var(--sc); }
+.inst-row.val b { color: var(--ok); font-size: 15px; }
+.drop-inst { display: flex; flex-wrap: wrap; gap: 6px; justify-content: center; margin-top: 8px; font-size: 12px; }
+.drop-inst span:not(.sp-tag) { padding: 2px 8px; border-radius: 10px; background: rgba(255,255,255,.08); }
+/* Раскладки кнопок */
+body:not(.is-touch) .touch-only { display: none; }
+.le-presets { display: flex; gap: 6px; margin-bottom: 8px; }
+.le-presets button { flex: 1; padding: 7px 4px; border-radius: 8px; border: 1px solid rgba(255,255,255,.2); background: rgba(41,182,246,.14); color: #fff; font-weight: 700; font-size: 12px; }
+/* Кнопки сенсорного HUD — стиль мобильных шутеров: стекло, тонкое кольцо, мягкое свечение */
+.tbtn { background: radial-gradient(circle at 50% 35%, rgba(255,255,255,.12), rgba(10,16,24,.38) 70%); border: 1.5px solid rgba(255,255,255,.42); box-shadow: inset 0 0 0 3px rgba(0,0,0,.18), 0 2px 10px rgba(0,0,0,.25); backdrop-filter: blur(2px); transition: transform .06s; }
+.tbtn.down { transform: translate(-50%,-50%) scale(.92); }
+.tbtn[data-btn=fire], .tbtn[data-btn=fireL] { background: radial-gradient(circle at 50% 35%, rgba(255,120,100,.35), rgba(150,20,10,.42) 70%); border-color: rgba(255,170,160,.6); }
+.tbtn[data-btn=crouch].on { background: radial-gradient(circle, rgba(41,182,246,.55), rgba(10,40,70,.5)); }

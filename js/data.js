@@ -207,6 +207,8 @@ export function itemShort(w) { const n = itemName(w); return n.split(' «')[0]; 
 
 // ---------- Кейсы ----------
 export const CASES = [
+  { id: 'clan',   name: 'Клановый кейс',  price: 0, currency: 'credits', creditPrice: 999999, color: '#ffc23d', reward: true, filter: (s) => !KNIVES[s.weapon] && ['epic', 'legendary', 'mythic'].includes(s.rarity),
+    weights: { epic: 60, legendary: 30, mythic: 10 }, knifeChance: 0.04 },
   { id: 'field',  name: 'Полевой кейс',   price: 0,  currency: 'credits', creditPrice: 250, color: '#5b7c99', filter: (s) => !KNIVES[s.weapon],
     weights: { common: 62, rare: 26, epic: 9, legendary: 2.6, mythic: 0.4 } },
   { id: 'urban',  name: 'Кейс «Город»',   price: 100, currency: 'gold', color: '#2ec4ff', filter: (s) => !KNIVES[s.weapon] && ['rifle', 'smg'].includes(WEAPONS[s.weapon].cat),

@@ -18,6 +18,13 @@ export const DEFAULT_LAYOUT = {
   pause:    { x: 96, y: 8,  size: 44,  opacity: 0.5 },
 };
 
+// Готовые раскладки: 2 пальца (классика), 3 пальца (огонь слева), 4 пальца («коготь»)
+export const LAYOUT_PRESETS = {
+  classic: { name: '2 пальца', layout: DEFAULT_LAYOUT },
+  three: { name: '3 пальца', layout: { ...DEFAULT_LAYOUT, fireL: { x: 8, y: 34, size: 78, opacity: 0.55 }, aim: { x: 92, y: 40, size: 62, opacity: 0.5 }, crouch: { x: 92, y: 86, size: 64, opacity: 0.5 }, jump: { x: 80, y: 86, size: 64, opacity: 0.5 } } },
+  claw: { name: '4 пальца', layout: { ...DEFAULT_LAYOUT, fireL: { x: 18, y: 18, size: 74, opacity: 0.55 }, aim: { x: 82, y: 18, size: 70, opacity: 0.55 }, jump: { x: 70, y: 16, size: 60, opacity: 0.5 }, crouch: { x: 92, y: 30, size: 60, opacity: 0.5 }, reload: { x: 30, y: 16, size: 54, opacity: 0.5 }, score: { x: 50, y: 6, size: 40, opacity: 0.5 }, pause: { x: 97, y: 7, size: 40, opacity: 0.5 } } },
+};
+
 export const BUTTON_LABELS = {
   joystick: 'Движение', fire: 'Огонь', fireL: 'Огонь (лев.)', aim: 'Прицел', jump: 'Прыжок', crouch: 'Присед',
   reload: 'Перезарядка', weapon: 'Оружие', grenade: 'Граната', use: 'Действие', buy: 'Закупка', score: 'Счёт', pause: 'Пауза',

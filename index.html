@@ -186,6 +186,7 @@
     <div class="panel-head"><h2>Пауза</h2></div>
     <button class="menu-btn primary" id="resume-btn">Продолжить</button>
     <button class="menu-btn" id="pause-settings">Настройки</button>
+    <button class="menu-btn touch-only" id="pause-layout">Расстановка кнопок</button>
     <button class="menu-btn danger" id="quit-btn">Покинуть матч</button>
     <p class="hint" id="pause-hint"></p>
   </div>
@@ -205,6 +206,7 @@
 <div id="layout-editor" class="overlay hidden">
   <div id="le-area"></div>
   <div class="le-panel">
+    <div class="le-presets" id="le-presets"></div>
     <div id="le-selected">Выберите кнопку</div>
     <label>Размер <input type="range" id="le-size" min="36" max="220" step="2"></label>
     <label>Прозрачность <input type="range" id="le-opacity" min="0.15" max="1" step="0.05"></label>

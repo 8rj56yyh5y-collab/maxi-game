@@ -1,6 +1,6 @@
 // Точка входа: загрузка, лобби, экраны меню, закупка, настройки, матч, игровой цикл.
 import * as THREE from 'three';
-import { settings, saveSettings, getLayout, DEFAULT_LAYOUT, BUTTON_LABELS, isTouchMode, hadSavedSettings, applyPreset, resetSettings } from './settings.js';
+import { settings, saveSettings, getLayout, DEFAULT_LAYOUT, LAYOUT_PRESETS, BUTTON_LABELS, isTouchMode, hadSavedSettings, applyPreset, resetSettings } from './settings.js';
 import { Input, BTN_ICONS } from './input.js';
 import { HUD } from './hud.js';
 import { Game } from './game.js';
@@ -8,9 +8,11 @@ import { MAPS, buildMap, prepareMap } from './maps.js';
 import { WEAPONS, KNIVES, GRENADES, CATS, CAT_ORDER, MODES, MAP_INFO, RARITY, RARITY_ORDER, CASES, STORE, levelInfo, itemName, rankOf, rankBadge, SEASON, PASS, PASS_XP, SKINS as ALL_SKINS, COLLECTIONS } from './data.js';
 import { DIFFICULTY } from './bots.js';
 import { profile, saveProfile, SKINS, equip, equippedSkin, openCase, buyCase, casePrice, caseContents, sellSkin, ownedKnives, buyStoreItem, dailyAvailable, claimDaily, weaponAvailableFor, passLevel, claimPass } from './skins.js';
-import { skinPreviewURL } from './textures.js';
+import { skinPreviewURL, setInstanceResolver } from './textures.js';
+import { instanceOf, specialPattern, skinValue, instanceHTML, finishClass, wearGrade } from './skinvalue.js';
 import { fxTime } from './skinart.js';
-import { avatarHTML, setAvatarFromFile, setAvatarEmblem, emblemSVG, EMBLEM_ICONS, EMBLEM_COLORS, CLAN_LIST, CLAN_ROLES, createClan, joinClan, leaveClan, clanXpNeed, clanMatchXp, clanTag } from './social.js';
+import { claimName, releaseName, publishClan, initRegistry, playerClans } from './registry.js';
+import { avatarHTML, setAvatarFromFile, setAvatarEmblem, emblemSVG, EMBLEM_ICONS, EMBLEM_COLORS, CLAN_LIST, CLAN_ROLES, createClan, joinClan, leaveClan, clanXpNeed, clanMatchXp, clanTag, cwState, cwOpponents, cwDifficulty, cwApply, cwLeague } from './social.js';
 import { CharacterModel } from './character.js';
 import { buildWeaponModel } from './weapons.js';
 import { setupAtmosphere, followShadow, Pipeline } from './render.js';
@@ -436,11 +438,20 @@ function invInfo() {
   const col = s.collection === 'blades' ? { name: 'Клинки', lore: 'Ножи выпадают редко: из кейсов с особым шансом и из кейса «Самоцветы».' } : COLLECTIONS[s.collection] || COLLECTIONS.base;
   $('inv-info').innerHTML = `<div class="card inv-card" style="--rc:${RARITY[s.rarity].color}"><div class="wsub" style="color:${RARITY[s.rarity].color}">${RARITY[s.rarity].name}${s.fx ? ' · <span class="live">ЖИВОЙ СКИН</span>' : ''}${s.signature ? ' · ИМЕННОЙ' : ''}</div><div class="wname">${itemName(s.weapon).split(' «')[0]} | ${s.name}</div>
     <div class="coll"><small>Коллекция</small><b>${col.name}</b></div>
+    ${instanceHTML(s)}
     ${s.story ? `<p class="story">«${s.story}»</p>` : `<p class="story dim">${col.lore}</p>`}
-    <div class="btn-row" style="margin-top:12px"><button class="btn" id="inv-eq">${eq ? 'Снять' : 'Экипировать'}</button><button class="btn danger" id="inv-sell">Продать · ◈ ${RARITY[s.rarity].sell * 10}</button></div></div>`;
+    <div class="btn-row" style="margin-top:12px"><button class="btn" id="inv-eq">${eq ? 'Снять' : 'Экипировать'}</button><button class="btn danger" id="inv-sell">Продать · ◈ ${sellPrice(s)}</button></div></div>`;
   $('inv-eq').onclick = () => { equip(s.weapon, eq ? null : s.id); if (s.agent) { lobby.team = null; setLobbyTeam(s.agent.team); } if (!eq && KNIVES[s.weapon]) profile.knife = s.weapon; saveProfile(); sound.uiClick(); renderInventory(); };
-  $('inv-sell').onclick = () => { const v = sellSkin(s.id); toast(`Продано за ◈ ${v}`); invSel = null; renderTopbar(); renderInventory(); };
+  $('inv-sell').onclick = () => { const v = sellSkin(s.id, sellPrice(s)); toast(`Продано за ◈ ${v}`); invSel = null; renderTopbar(); renderInventory(); };
 }
+
+function dropInfo(s) {
+  const it = instanceOf(s), sp = specialPattern(it.seed, s), fc = finishClass(s), wg = wearGrade(it.f);
+  return `<div class="drop-inst"><span>${fc.name}</span>${s.agent || s.pattern === 'art' ? '' : `<span>${wg.name} · ${it.f.toFixed(3)}</span>`}<span>Узор #${it.seed}</span>${sp ? `<span class="sp-tag" style="--sc:${sp.color}">${sp.name}!</span>` : ''}<span>◈ ${skinValue(s).toLocaleString('ru')}</span></div>`;
+}
+function sellPrice(s) { return Math.max(RARITY[s.rarity].sell * 10, Math.round(skinValue(s) * 0.12 / 5) * 5); }
+// Экземпляры скинов: износ и номер узора влияют на текстуру
+setInstanceResolver((id) => { if (!profile.owned.includes(id)) return null; const s = ALL_SKINS[id]; if (!s) return null; const it = instanceOf(s); return { ...it, special: specialPattern(it.seed, s) }; });
 
 // Картинка предмета: 3D-рендер (готовится в фоне), пока — образец узора
 function onItemReady(id, url) { if (!url) return; document.querySelectorAll(`img[data-item="${id}"]`).forEach(img => { img.src = url; img.classList.add('r3d'); img.removeAttribute('data-item'); }); }
@@ -453,7 +464,7 @@ function itemPic(s) {
 function renderCases() {
   renderTopbar();
   setShowcase(profile.loadout.A.primary, equippedSkin(profile.loadout.A.primary));
-  $('case-list').innerHTML = CASES.map(c => {
+  $('case-list').innerHTML = CASES.filter(c => !c.reward || profile.cases[c.id]).map(c => {
     const pr = casePrice(c);
     const total = Object.values(c.weights).reduce((a, b) => a + b, 0);
     const odds = Object.entries(c.weights).map(([r, w]) => `<span style="color:${RARITY[r].color}">${RARITY[r].name} ${(w / total * 100).toFixed(1)}%</span>`).join(' · ');
@@ -464,7 +475,7 @@ function renderCases() {
     return `<div class="case" style="--cc:${c.color}"><div class="box">${best ? `<div class="case-hero">${itemPic(best)}</div>` : '<div class="crate3d"></div>'}${n ? `<span class="count">×${n}</span>` : ''}</div><h3>${c.name}</h3>${loreTxt ? `<div class="case-coll">Коллекция «${loreTxt}»</div>` : ''}
       <div class="hint" style="font-size:11px;line-height:1.5">${odds}</div>
       <div class="btn-row"><button class="btn ghost" data-view="${c.id}">Содержимое</button></div>
-      <div class="btn-row"><button class="btn ghost" data-buy="${c.id}">Купить · ${pr.cur === 'gold' ? '●' : '◈'} ${pr.amount}</button><button class="btn" data-open="${c.id}" ${n ? '' : 'disabled'}>Открыть</button></div></div>`;
+      <div class="btn-row">${c.reward ? '<span class="hint">Награда клановых битв</span>' : `<button class="btn ghost" data-buy="${c.id}">Купить · ${pr.cur === 'gold' ? '●' : '◈'} ${pr.amount}</button>`}<button class="btn" data-open="${c.id}" ${n ? '' : 'disabled'}>Открыть</button></div></div>`;
   }).join('');
   $('case-list').querySelectorAll('[data-buy]').forEach(b => b.onclick = () => { const c = CASES.find(x => x.id === b.dataset.buy); if (buyCase(c)) { sound.buy(); toast(`${c.name} добавлен в инвентарь`); renderCases(); } else toast('Недостаточно валюты — загляните в магазин'); });
   $('case-list').querySelectorAll('[data-open]').forEach(b => b.onclick = () => startCaseOpen(CASES.find(x => x.id === b.dataset.open)));
@@ -516,7 +527,7 @@ function startCaseOpen(c) {
     clearInterval(tick);
     sound.reward();
     const r = RARITY[res.skin.rarity];
-    $('case-result').innerHTML = `<span style="color:${r.color}">${itemName(res.skin.weapon).split(' «')[0]} | ${res.skin.name}</span><small>${r.name}${res.duplicate ? ` · дубликат, продан за ◈ ${r.sell * 10}` : ''}</small>`;
+    $('case-result').innerHTML = `<span style="color:${r.color}">${itemName(res.skin.weapon).split(' «')[0]} | ${res.skin.name}</span><small>${r.name}${res.duplicate ? ` · дубликат, продан за ◈ ${r.sell * 10}` : ''}</small>${res.duplicate ? '' : dropInfo(res.skin)}`;
     $('case-sell').style.display = res.duplicate ? 'none' : '';
     $('case-close').parentElement.classList.remove('hidden');
     renderTopbar();
@@ -591,20 +602,46 @@ function renderClan() {
     ['cl-name', 'cl-tag'].forEach(id => $(id).oninput = () => { keep(); $('cp-name').textContent = clanForm.name || 'New Clan'; $('cp-name').nextElementSibling.textContent = `[${clanForm.tag || 'TAG'}]`; });
     $('clan-panel').querySelectorAll('.av-em').forEach(b => b.onclick = () => { keep(); clanForm.icon = b.dataset.ic; renderClan(); });
     $('clan-panel').querySelectorAll('.clr').forEach(b => b.onclick = () => { keep(); clanForm.color = +b.dataset.c; renderClan(); });
-    $('cl-create').onclick = () => { keep(); try { createClan(clanForm); sound.reward(); toast('Клан создан'); renderTopbar(); renderClan(); } catch (e) { toast(e.message); } };
+    $('cl-create').onclick = async () => {
+      keep();
+      const name = (clanForm.name || '').trim(), tag = (clanForm.tag || '').trim().toUpperCase();
+      if (name.length >= 3 && tag.length >= 2) {
+        toast('Проверяем название и тег…');
+        const a = await claimName('clan', name); if (!a.ok) { toast(`Клан «${name}» уже существует`); return; }
+        const b = await claimName('tag', tag); if (!b.ok) { releaseName('clan', name); toast(`Тег [${tag}] уже занят`); return; }
+      }
+      try { const c = createClan(clanForm); publishClan(c); sound.reward(); toast('Клан создан'); renderTopbar(); renderClan(); } catch (e) { toast(e.message); }
+    };
+    playerClans().then(list => {
+      const box = document.querySelector('#clan-panel .clan-join'); if (!box || !list.length) return;
+      box.insertAdjacentHTML('beforeend', `<div class="card-title" style="margin-top:10px">Кланы игроков</div>` + list.map((k, i) => `<div class="clan-row">${emblemSVG(k.icon || 'shield', EMBLEM_COLORS[k.color] || EMBLEM_COLORS[0], 46, 'shield')}<div class="cr-info"><b>${esc(k.name)} <small>[${esc(k.tag)}]</small></b><span>${k.motto ? '«' + esc(k.motto) + '»' : ''}</span><small>Ур. ${k.level | 0} · ${k.size | 0}/50 · игроки</small></div><button class="btn" data-pjoin="${i}">Вступить</button></div>`).join(''));
+      box.querySelectorAll('[data-pjoin]').forEach(b => b.onclick = () => { const k = list[+b.dataset.pjoin]; joinClan({ name: k.name, tag: k.tag, motto: k.motto || '', icon: k.icon || 'shield', color: k.color | 0, level: k.level | 0 || 1, size: k.size | 0 || 1 }); sound.reward(); toast('Вы вступили в клан'); renderTopbar(); renderClan(); });
+    });
     $('clan-panel').querySelectorAll('[data-join]').forEach(b => b.onclick = () => { joinClan(CLAN_LIST[+b.dataset.join]); sound.reward(); toast('Вы вступили в клан'); renderTopbar(); renderClan(); });
     return;
   }
   const need = clanXpNeed(c.level);
+  const cw = cwState(); saveProfile();
+  const opps = cwOpponents(window.__playerClans || []);
+  const ladder = [...opps, { name: c.name, tag: c.tag, icon: c.icon, color: c.color, rating: cw.rating, me: true }].sort((a, b) => b.rating - a.rating);
   const members = [{ name: settings.nickname, role: c.role, rating: profile.rating || 0, online: true, contrib: 0, me: true }, ...c.members].sort((a, b) => Object.keys(CLAN_ROLES).indexOf(a.role) - Object.keys(CLAN_ROLES).indexOf(b.role));
   $('clan-panel').innerHTML = `<div class="clan-head">${emblemSVG(c.icon, EMBLEM_COLORS[c.color], 96, 'shield')}<div class="ch-info"><h2>${esc(c.name)} <small>[${esc(c.tag)}]</small></h2><p>«${esc(c.motto || 'No motto')}»</p>
       <div class="ch-lvl"><b>Уровень ${c.level}</b><div class="pw-bar"><i style="width:${c.xp / need * 100}%"></i></div><small>${c.xp} / ${need} опыта клана · за каждый матч клан получает опыт</small></div></div>
       <div class="ch-stats"><div>Участников<b>${members.length}</b></div><div>В сети<b>${members.filter(m => m.online).length}</b></div><div>Ваша роль<b>${CLAN_ROLES[c.role]}</b></div></div></div>
+    <div class="card cw-card"><div class="cw-head"><div><div class="card-title">Клановые битвы · сезон</div><div class="cw-rating"><b style="color:${cwLeague(cw.rating).color}">${cwLeague(cw.rating).name}</b> <span>${cw.rating} CWR</span></div>
+        <small>${cw.wins} побед · ${cw.losses} поражений${cw.streak > 1 ? ` · серия ${cw.streak} 🔥` : ''}</small></div>
+        <button class="play-btn small" id="cw-quick">Найти клан-бой</button></div>
+      <div class="cw-cols"><div class="cw-ladder"><div class="hint">Таблица сезона · бой 5×5, «Закладка бомбы», до 7 побед</div>${ladder.map((o, i) => `<div class="cw-row ${o.me ? 'me' : ''}"><span class="cw-pos">${i + 1}</span>${emblemSVG(o.icon || 'shield', EMBLEM_COLORS[o.color] || EMBLEM_COLORS[0], 30, 'shield')}<b>${esc(o.name)} <small>[${esc(o.tag)}]</small></b><span class="cw-r" style="color:${cwLeague(o.rating).color}">${o.rating}</span>${o.me ? '<span class="cw-you">ВЫ</span>' : `<button class="btn" data-cw="${opps.indexOf(o)}">Вызов</button>`}</div>`).join('')}</div>
+        <div class="cw-hist"><div class="hint">Последние бои</div>${cw.history.length ? cw.history.map(h => `<div class="cw-h ${h.draw ? '' : h.win ? 'w' : 'l'}"><b>${h.draw ? 'Н' : h.win ? 'П' : 'П'}</b><span>[${esc(h.tag)}] ${esc(h.opp)}</span><small>${h.score} · ${h.delta >= 0 ? '+' : ''}${h.delta}</small></div>`).join('') : '<div class="hint">Пока боёв не было. Вызовите клан из таблицы!</div>'}
+        <div class="hint" style="margin-top:8px">Награды за победу: +400 ₴, +150 опыта клану, клановый кейс каждые 3 победы.</div></div></div></div>
     <div class="clan-cols"><div class="card"><div class="card-title">Состав</div><div class="clan-members">${members.map(m => `<div class="cm ${m.me ? 'me' : ''}"><i class="dot ${m.online ? 'on' : ''}"></i><b>${esc(m.name)}</b><span class="role r-${m.role}">${CLAN_ROLES[m.role]}</span><span class="cm-rank">${rankBadge(m.rating, 22)}${rankOf(m.rating).name}</span></div>`).join('')}</div></div>
       <div class="card"><div class="card-title">Журнал клана</div><div class="clan-log">${c.log.slice().reverse().map(l => `<div><small>${new Date(l.t).toLocaleDateString('ru')}</small> ${esc(l.text)}</div>`).join('')}</div>
         <div class="card-title" style="margin-top:12px">Бонусы уровня</div><div class="hint">Ур. 5: +5% кредитов за матч · Ур. 10: клановый кейс раз в день · Ур. 20: золотая рамка тега</div>
         <button class="btn danger" id="cl-leave" style="margin-top:14px">${c.role === 'leader' ? 'Распустить клан' : 'Покинуть клан'}</button></div></div>`;
-  $('cl-leave').onclick = () => { leaveClan(); toast('Вы покинули клан'); renderTopbar(); renderClan(); };
+  $('clan-panel').querySelectorAll('[data-cw]').forEach(b => b.onclick = () => startClanWar(opps[+b.dataset.cw]));
+  $('cw-quick').onclick = () => { const near = opps.slice().sort((a, b) => Math.abs(a.rating - cw.rating) - Math.abs(b.rating - cw.rating)).slice(0, 3); startClanWar(near[Math.floor(Math.random() * near.length)]); };
+  if (!window.__playerClans) playerClans().then(l => { window.__playerClans = l; if (l.length && profile.clan && !$('clan-panel').classList.contains('hidden')) renderClan(); });
+  $('cl-leave').onclick = () => { const c = profile.clan; if (c && c.role === 'leader' && c.own) { releaseName('clan', c.name); releaseName('tag', c.tag); } leaveClan(); toast('Вы покинули клан'); renderTopbar(); renderClan(); };
 }
 
 function renderProfile() {
@@ -624,7 +661,15 @@ function renderProfile() {
     <div class="lo-list">${top.length ? top.map(([id, n]) => `<div class="wcard">${iconImg(id)}<b>${itemName(id)}</b><small>${n} убийств</small></div>`).join('') : '<p class="hint">Сыграйте матч, чтобы появилась статистика.</p>'}</div>
     <div class="card-title" style="margin-top:14px">Последние матчи</div>
     <div>${(profile.history || []).slice(-8).reverse().map(h => `<div class="set-row"><span style="width:110px;color:${h.win ? 'var(--ok)' : h.draw ? '#ccc' : 'var(--danger)'};font-weight:700">${h.win ? 'Победа' : h.draw ? 'Ничья' : 'Поражение'}</span><span style="width:170px">${MODES[h.mode] ? MODES[h.mode].name : h.mode}</span><span style="width:90px">${MAPS[h.map] ? MAPS[h.map].name : ''}</span><span>${h.k}/${h.d} · ${h.score}</span></div>`).join('') || '<p class="hint">История пуста.</p>'}</div>`;
-  $('nick-save').onclick = () => { const raw = $('nick-in').value.trim(); if (/[^A-Za-z0-9_.\-]/.test(raw)) { toast('Ник — только латиница, цифры, _ . -'); return; } const v = raw.slice(0, 16); if (v) { settings.nickname = v; saveSettings(); renderTopbar(); renderProfile(); toast('Ник изменён'); } };
+  $('nick-save').onclick = async () => {
+    const raw = $('nick-in').value.trim(); if (/[^A-Za-z0-9_.\-]/.test(raw)) { toast('Ник — только латиница, цифры, _ . -'); return; }
+    const v = raw.slice(0, 16); if (v.length < 3) { toast('Ник — от 3 символов'); return; }
+    if (v === settings.nickname) return;
+    $('nick-save').disabled = true; toast('Проверяем, свободен ли ник…');
+    const r = await claimName('nick', v, settings.nickname); $('nick-save').disabled = false;
+    if (!r.ok) { toast(`Ник «${v}» уже занят другим игроком`); return; }
+    settings.nickname = v; saveSettings(); renderTopbar(); renderProfile(); toast('Ник изменён');
+  };
   $('av-file').onchange = (e) => { setAvatarFromFile(e.target.files[0]).then(() => { renderTopbar(); renderProfile(); toast('Аватар обновлён'); }).catch(err => toast(err.message)); };
   $('profile-panel').querySelectorAll('.av-em').forEach(b => b.onclick = () => { setAvatarEmblem(b.dataset.ic, +b.dataset.c); sound.uiClick(); renderTopbar(); renderProfile(); });
 }
@@ -792,6 +837,8 @@ function openLayoutEditor() {
   renderLayoutEditor();
 }
 function renderLayoutEditor() {
+  $('le-presets').innerHTML = Object.entries(LAYOUT_PRESETS).map(([k, p]) => `<button data-pre="${k}">${p.name}</button>`).join('');
+  $('le-presets').querySelectorAll('[data-pre]').forEach(b => b.onclick = () => { leLayout = JSON.parse(JSON.stringify(LAYOUT_PRESETS[b.dataset.pre].layout)); leSel = null; $('le-firel').checked = leLayout.fireL.enabled !== false; renderLayoutEditor(); toast('Раскладка: ' + LAYOUT_PRESETS[b.dataset.pre].name); });
   const area = $('le-area'); area.innerHTML = '';
   for (const [name, l] of Object.entries(leLayout)) {
     if (name === 'fireL' && l.enabled === false) continue;
@@ -821,6 +868,7 @@ $('le-opacity').oninput = () => { if (!leSel) return; leLayout[leSel].opacity = 
 $('le-firel').onchange = () => { leLayout.fireL.enabled = $('le-firel').checked; renderLayoutEditor(); };
 $('le-reset').onclick = () => { leLayout = JSON.parse(JSON.stringify(DEFAULT_LAYOUT)); leSel = null; $('le-firel').checked = true; renderLayoutEditor(); };
 $('le-cancel').onclick = () => $('layout-editor').classList.add('hidden');
+$('pause-layout').onclick = () => openLayoutEditor();
 $('le-save').onclick = () => { settings.layout = leLayout; saveSettings(); $('layout-editor').classList.add('hidden'); if (game) input.buildTouchUI($('touch-ui')); toast('Расстановка сохранена'); };
 
 // ---------- Меню закупки ----------
@@ -869,6 +917,15 @@ function loadingFor(mapId, modeName) {
   showTip(); clearInterval(tipTimer); tipTimer = setInterval(showTip, 4500);
 }
 
+let pendingClanWar = null;
+function startClanWar(opp) {
+  const c = profile.clan; if (!c || !opp) return;
+  const ally = [...(c.members || []).filter(m => m.online).map(m => m.name), ...(c.members || []).map(m => m.name)];
+  pendingClanWar = { opp, cfg: { mode: 'defuse', rounds: 12, perTeam: 5, side: 'auto', difficulty: cwDifficulty(opp), clanWar: { ally: { tag: c.tag, names: [...new Set(ally)] }, enemy: { tag: opp.tag, name: opp.name, names: opp.roster } } } };
+  toast(`Клановая битва: [${c.tag}] против [${opp.tag}] ${opp.name}`);
+  startMatch();
+}
+
 async function startMatch() {
   sound.init();
   disposeLobbyMap();
@@ -876,7 +933,7 @@ async function startMatch() {
   $('menu').classList.add('hidden');
   ['pause', 'end', 'modal'].forEach(id => $(id).classList.add('hidden'));
   $('load-text').textContent = 'Загрузка карты…'; setLoad('10%');
-  loadingFor(settings.match.map, (MODES[settings.match.mode] || {}).name);
+  loadingFor(settings.match.map, pendingClanWar ? `Клановая битва · [${profile.clan.tag}] vs [${pendingClanWar.opp.tag}]` : (MODES[settings.match.mode] || {}).name);
   $('loading').classList.remove('hidden');
   await nextFrame();
   const m = settings.match;
@@ -888,11 +945,12 @@ async function startMatch() {
   input.touch = isTouchMode();
   input.reset(); input.enabled = true;
   input.enableGyro(settings.gyro);
-  $('hud').classList.toggle('touch', input.touch);
+  $('hud').classList.toggle('touch', input.touch); document.body.classList.toggle('is-touch', input.touch);
   input.buildTouchUI($('touch-ui'));
   hud.applyCrosshair();
   settings.matchName = clanTag() + (settings.nickname || 'Player');
-  const cfg = m.mode === 'ranked' ? { ...m, mode: 'defuse', ranked: true, rounds: 12, perTeam: 5, side: 'auto', difficulty: rankOf(profile.rating || 0).bots } : { ...m };
+  const cw = pendingClanWar; pendingClanWar = null;
+  const cfg = cw ? { ...m, ...cw.cfg, cwOpp: cw.opp } : m.mode === 'ranked' ? { ...m, mode: 'defuse', ranked: true, rounds: 12, perTeam: 5, side: 'auto', difficulty: rankOf(profile.rating || 0).bots } : { ...m };
   game = new Game(renderer, input, hud, cfg, { onEnd: onMatchEnd, onBuyMenu: () => toggleBuy(), isBuyOpen }, hdri);
   hud.setMoney(cfg.mode === 'defuse' ? game.player.money : null);
   game.resize(innerWidth, innerHeight);
@@ -950,6 +1008,12 @@ function onMatchEnd({ win, draw, earned, xp, player, game: g }) {
   profile.passXp = (profile.passXp || 0) + xp;
   const clanXp = clanMatchXp(!!win, player ? player.kills : 0);
   let rankHtml = clanXp ? `<div class="hint" style="margin-top:6px">Клан [${esc(profile.clan.tag)}]: +${clanXp} опыта</div>` : '';
+  if (g.cfg.clanWar && g.cfg.cwOpp && profile.clan) {
+    const sc = `${g.score[player.team]}:${g.score[player.team === 'A' ? 'B' : 'A']}`;
+    const r = cwApply(g.cfg.cwOpp, !!win, !!draw, sc);
+    if (win) { profile.credits += 400; clanMatchXp(true, 15); const w = profile.clan.cw.wins; if (w % 3 === 0) { profile.cases.clan = (profile.cases.clan || 0) + 1; } }
+    if (r) rankHtml += `<div class="rank-box" style="justify-content:center"><div style="text-align:center"><div class="hint">Клановая битва против [${esc(g.cfg.cwOpp.tag)}] ${esc(g.cfg.cwOpp.name)}</div><b style="color:${cwLeague(r.rating).color}">${cwLeague(r.rating).name} · ${r.rating} CWR</b><div class="rank-delta ${r.delta >= 0 ? 'up' : 'down'}">${r.delta >= 0 ? '+' : ''}${r.delta} CWR</div>${win ? '<div class="hint">+400 ₴ · +150 опыта клану' + (profile.clan.cw.wins % 3 === 0 ? ' · клановый кейс!' : '') + '</div>' : ''}</div></div>`;
+  }
   if (g.cfg.ranked) {
     const before = profile.rating || 0;
     const perf = Math.min(10, player.kills) + Math.min(5, player.assists);
@@ -1006,7 +1070,7 @@ window.addEventListener('resize', () => { renderer.setSize(innerWidth, innerHeig
 // ---------- Старт ----------
 // Ники и кланы — латиницей (перевод старых сохранений)
 function migrateLatin() {
-  if (!settings.nickname || /[^A-Za-z0-9_.\-]/.test(settings.nickname)) { settings.nickname = 'Player'; saveSettings(); }
+  if (!settings.nickname || settings.nickname === 'Player' || /[^A-Za-z0-9_.\-]/.test(settings.nickname)) { settings.nickname = 'Player' + (1000 + Math.floor(Math.random() * 9000)); saveSettings(); }
   const c = profile.clan;
   if (c && /[^\x20-\x7e]/.test(c.name + c.motto)) {
     const k = CLAN_LIST.find(x => x.tag === c.tag);
@@ -1019,6 +1083,7 @@ function migrateLatin() {
 
 async function boot() {
   migrateLatin();
+  initRegistry().then(ok => { if (ok) claimName('nick', settings.nickname).then(r => { if (!r.ok) toast(`Ник «${settings.nickname}» занят другим игроком — смените его в профиле`); }); });
   const lt = $('load-text');
   loadingFor(null, ''); $('ld-tip').textContent = '';
   lt.textContent = 'Загрузка моделей и звуков…';
@@ -1042,7 +1107,7 @@ async function boot() {
 }
 
 // Превью карт догружаются в фоне и кэшируются
-const THUMB_KEY = 'maxi_thumbs_v3';
+const THUMB_KEY = 'maxi_thumbs_v4';
 async function fillThumbs() {
   for (const id of Object.keys(MAPS)) {
     if (mapThumbs[id] || MAPS[id].hidden) continue;
@@ -1056,4 +1121,4 @@ async function fillThumbs() {
 }
 boot().catch(e => { console.error(e); $('load-text').textContent = 'Ошибка загрузки: ' + e.message; });
 
-window.__maxi = { get game() { return game; }, settings, profile, A };
+window.__maxi = { get game() { return game; }, settings, profile, A, quit: () => quitToMenu() };
