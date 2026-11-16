@@ -147,7 +147,7 @@ export class ViewModel {
     const target = aiming && this.cat !== 'knife' && this.cat !== 'grenade' ? 1 : 0;
     this.aimT += (target - this.aimT) * Math.min(1, dt * 14);
     if (Math.abs(target - this.aimT) < 0.01) this.aimT = target;
-    const hip = HIP[this.cat] || HIP.rifle;
+    const hip = (this.cat !== 'knife' && globalThis.VM_HIP) || HIP[this.cat] || HIP.rifle;
     const ads = [0, -this.sightOff, ADS_Z[this.cat] || -0.06];
     const a = this.aimT;
     const bobAmt = Math.min(1, moveSpeed / 5.5) * (onGround ? 1 : 0.25) * (1 - a * 0.85);
