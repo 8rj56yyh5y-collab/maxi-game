@@ -857,17 +857,31 @@ function renderBuy() {
 $('buy-close').onclick = () => toggleBuy(false);
 
 // ---------- Матч ----------
+// Экран загрузки: шкала, проценты, советы, превью карты
+const TIPS = ['Стреляйте короткими очередями — разброс растёт с каждой пулей.', 'В прыжке и на бегу точность сильно падает.', 'Присед уменьшает разброс и делает вас тише.', 'Покупайте броню раньше оружия — она спасает от хедшотов.', 'Дымовая граната перекрывает обзор снайперу на 15 секунд.', 'Слушайте шаги: тихий шаг (Shift) не слышен противнику.', 'Нож в спину наносит смертельный урон.', 'Закладка на точке B дальше от спавна спецназа — используйте это.', 'Агентов и скины можно надеть в инвентаре — их видно в лобби и в бою.', 'Кланы получают опыт за каждый матч их участников.'];
+let tipTimer = 0;
+function setLoad(w) { const v = typeof w === 'string' ? parseFloat(w) : w; $('load-fill').style.width = v + '%'; $('ld-pct').textContent = Math.round(v) + '%'; }
+function loadingFor(mapId, modeName) {
+  const art = $('ld-art'), th = mapId && mapThumbs[mapId];
+  if (th && th.length > 30) { art.style.backgroundImage = `url(${th})`; art.classList.add('has'); } else { art.style.backgroundImage = ''; art.classList.remove('has'); }
+  $('ld-map').textContent = mapId && MAPS[mapId] ? MAPS[mapId].name : '';
+  $('ld-mode').textContent = modeName || '';
+  const showTip = () => { $('ld-tip').textContent = TIPS[Math.floor(Math.random() * TIPS.length)]; };
+  showTip(); clearInterval(tipTimer); tipTimer = setInterval(showTip, 4500);
+}
+
 async function startMatch() {
   sound.init();
   disposeLobbyMap();
   if (game) { game.dispose(); game = null; }
   $('menu').classList.add('hidden');
   ['pause', 'end', 'modal'].forEach(id => $(id).classList.add('hidden'));
-  $('load-text').textContent = 'Загрузка карты…'; $('load-fill').style.width = '60%';
+  $('load-text').textContent = 'Загрузка карты…'; setLoad('10%');
+  loadingFor(settings.match.map, (MODES[settings.match.mode] || {}).name);
   $('loading').classList.remove('hidden');
   await nextFrame();
   const m = settings.match;
-  await prepareMap(m.map, (p) => { $('load-fill').style.width = (20 + p * 60) + '%'; });
+  await prepareMap(m.map, (p) => { setLoad((20 + p * 60) + '%'); });
   const hdri = await loadHDRI(MAPS[m.map].hdri);
   applyPixelRatio();
   renderer.setSize(innerWidth, innerHeight, false);
@@ -885,7 +899,7 @@ async function startMatch() {
   game.resize(innerWidth, innerHeight);
   await texturesReady();
   game.update(0.001); game.render();
-  $('load-fill').style.width = '100%';
+  setLoad('100%');
   hud.show(true);
   $('loading').classList.add('hidden');
   if (input.touch) { try { document.documentElement.requestFullscreen?.({ navigationUI: 'hide' }).catch(() => {}); } catch (e) { /* ignore */ } }
@@ -1006,16 +1020,17 @@ function migrateLatin() {
 
 async function boot() {
   migrateLatin();
-  const lt = $('load-text'), lf = $('load-fill');
+  const lt = $('load-text');
+  loadingFor(null, ''); $('ld-tip').textContent = '';
   lt.textContent = 'Загрузка моделей и звуков…';
-  await loadCore((p) => { lf.style.width = (p * 70) + '%'; });
+  await loadCore((p) => { setLoad((p * 70) + '%'); });
   lt.textContent = 'Подготовка оружия…'; await nextFrame();
   buildWeaponIcons(renderer);
   initItemRenderer(renderer);
-  lt.textContent = 'Подготовка лобби…'; lf.style.width = '78%';
+  lt.textContent = 'Подготовка лобби…'; setLoad('78%');
   await buildLobby();
   try { Object.assign(mapThumbs, JSON.parse(localStorage.getItem(THUMB_KEY) || '{}')); } catch (e) { /* ignore */ }
-  lf.style.width = '100%';
+  setLoad('100%');
   if (settings.match.side && settings.match.side !== 'auto') setLobbyTeam(settings.match.side);
   lt.textContent = 'Подготовка лобби…';
   if (!MAPS[settings.match.map] || MAPS[settings.match.map].hidden) settings.match.map = 'factory';

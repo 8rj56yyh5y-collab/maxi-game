@@ -539,3 +539,31 @@ body.can-use .tbtn[data-btn=use] { display: flex; }
 .clan-log { max-height: 160px; overflow-y: auto; font-size: 13px; display: flex; flex-direction: column; gap: 4px; } .clan-log small { color: var(--muted); margin-right: 6px; }
 #nav button { padding: 0 12px; font-size: 15px; letter-spacing: 1px; }
 @media (max-width: 1100px) { #nav button { padding: 0 8px; font-size: 13px; letter-spacing: .5px; } .tb-profile { min-width: 150px; } }
+/* ===== экран загрузки (v3) ===== */
+#loading { background: #05070a; display: block; overflow: hidden; }
+.ld-bg { position: absolute; inset: 0; overflow: hidden; }
+.ld-art { position: absolute; inset: -4%; background: radial-gradient(ellipse at 60% 40%, #1b2633, #05070a 70%); background-size: cover; background-position: center; filter: saturate(1.1) brightness(.55); transform: scale(1.04); animation: ldzoom 18s ease-in-out infinite alternate; }
+.ld-art.has { filter: blur(2px) saturate(1.15) brightness(.5); }
+@keyframes ldzoom { to { transform: scale(1.12) translateX(-1.5%); } }
+.ld-art::after { content: ''; position: absolute; inset: 0; background: linear-gradient(180deg, rgba(5,7,10,.55) 0%, rgba(5,7,10,0) 30%, rgba(5,7,10,0) 55%, rgba(5,7,10,.95) 100%), radial-gradient(ellipse at center, transparent 40%, rgba(0,0,0,.6) 100%); }
+.ld-beam { position: absolute; top: -20%; width: 34vw; height: 140%; background: linear-gradient(90deg, transparent, rgba(255,176,32,.13), transparent); transform: rotate(18deg); animation: ldbeam 7s linear infinite; }
+.ld-beam.b2 { animation-delay: -3.5s; background: linear-gradient(90deg, transparent, rgba(80,170,255,.08), transparent); }
+@keyframes ldbeam { from { left: -40%; } to { left: 110%; } }
+.ld-grid { position: absolute; inset: 0; background-image: linear-gradient(rgba(255,255,255,.035) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,.035) 1px, transparent 1px); background-size: 48px 48px; mask-image: radial-gradient(ellipse at center, #000 20%, transparent 75%); -webkit-mask-image: radial-gradient(ellipse at center, #000 20%, transparent 75%); }
+.ld-center { position: absolute; left: 50%; top: 44%; transform: translate(-50%, -50%); display: flex; flex-direction: column; align-items: center; gap: 6px; }
+.ld-emblem { width: 76px; height: 76px; color: var(--accent); filter: drop-shadow(0 0 18px rgba(255,176,32,.55)); animation: ldpulse 2.4s ease-in-out infinite; }
+@keyframes ldpulse { 50% { filter: drop-shadow(0 0 30px rgba(255,176,32,.85)); transform: scale(1.04); } }
+#loading .logo { font-size: clamp(42px, 7vw, 84px); letter-spacing: 6px; text-shadow: 0 4px 30px rgba(0,0,0,.6); }
+#loading .logo span { color: var(--accent); }
+.ld-sub { font-family: var(--head); letter-spacing: 10px; color: rgba(255,255,255,.55); font-size: 14px; }
+.ld-bottom { position: absolute; left: max(28px, env(safe-area-inset-left)); right: max(28px, env(safe-area-inset-right)); bottom: 70px; display: flex; justify-content: space-between; align-items: flex-end; gap: 20px; }
+.ld-map small { display: block; color: var(--accent2); letter-spacing: 3px; font-size: 12px; font-weight: 700; text-transform: uppercase; }
+.ld-map b { font-family: var(--head); font-size: clamp(30px, 4.5vw, 56px); letter-spacing: 3px; text-transform: uppercase; line-height: 1; }
+.ld-tip { max-width: 420px; text-align: right; color: #c8d0da; font-size: 13.5px; line-height: 1.45; border-right: 3px solid var(--accent); padding-right: 12px; }
+.ld-tip:empty { display: none; }
+.ld-bar { position: absolute; left: max(28px, env(safe-area-inset-left)); right: max(28px, env(safe-area-inset-right)); bottom: max(24px, env(safe-area-inset-bottom)); }
+#loading .load-bar { width: 100%; height: 4px; background: rgba(255,255,255,.08); overflow: hidden; }
+#loading .load-bar i { background: linear-gradient(90deg, #ff8a00, #ffd27a); box-shadow: 0 0 14px rgba(255,176,32,.8); position: relative; }
+#loading .load-bar i::after { content: ''; position: absolute; right: 0; top: 0; bottom: 0; width: 60px; background: linear-gradient(90deg, transparent, rgba(255,255,255,.8)); }
+.ld-row { display: flex; justify-content: space-between; margin-top: 8px; color: var(--muted); font-size: 12.5px; letter-spacing: 1px; text-transform: uppercase; }
+#ld-pct { font-family: var(--head); font-weight: 700; color: #fff; font-size: 15px; }
