@@ -7,6 +7,7 @@ import { surface } from './textures.js';
 
 // Положение точки хвата относительно глаза
 const HIP = { pistol: [0.11, -0.125, -0.4], smg: [0.125, -0.15, -0.3], rifle: [0.125, -0.155, -0.29], sniper: [0.125, -0.15, -0.26], shotgun: [0.125, -0.15, -0.29], knife: [0.15, -0.145, -0.41], grenade: [0.13, -0.13, -0.33] };
+const KNIFE_POSE = { pos: [0.13, -0.125, -0.36], rot: [0.32, 0.6, -0.3] };
 const sm01 = (x) => { const t = Math.min(1, Math.max(0, x)); return t * t * (3 - 2 * t); };
 const ADS_Z = { pistol: -0.38, smg: -0.15, rifle: -0.14, sniper: -0.1, shotgun: -0.16 };
 
@@ -70,7 +71,10 @@ export class ViewModel {
     const ud = gun.userData;
     gun.traverse(o => { if (o.isMesh) { o.castShadow = false; o.receiveShadow = false; } });
     // хват правой руки — в начале координат pivot
-    gun.position.copy(ud.gripR).multiplyScalar(-1);
+    // нож в кадре крупнее (как в топовых шутерах), остальное — в натуральную величину
+    const vs = this.cat === 'knife' ? 1.3 : 1;
+    gun.scale.setScalar(vs);
+    gun.position.copy(ud.gripR).multiplyScalar(-vs);
     this.pivot.add(gun);
     this.gun = gun;
     this.ud = ud;
@@ -108,7 +112,7 @@ export class ViewModel {
     if (ud.halves) for (const h of ud.halves) h.pivot.rotation.x = h.sx > 0 ? hA : -hB;
     const q = new THREE.Quaternion().setFromEuler(new THREE.Euler(spin, 0, tw));
     if (ud.spinPivot && spin) {
-      const P = ud.spinPivot;
+      const P = ud.spinPivot.clone().multiplyScalar(g.scale.x);
       g.quaternion.copy(q); g.position.copy(this.gunBase).add(P).sub(P.clone().applyQuaternion(q));
     } else { g.quaternion.copy(q); g.position.copy(this.gunBase); }
     return wr;
@@ -204,7 +208,12 @@ export class ViewModel {
       hip[1] + (ads[1] - hip[1]) * a + by + sy - drop - crouchOff,
       hip[2] + (ads[2] - hip[2]) * a + this.kick * 0.03 * (1 - a * 0.5),
     );
-    this.holder.rotation.set(0, (1 - a) * 0.06, (1 - a) * 0.03);
+    if (this.cat === 'knife') {
+      // нож: клинок вперёд-влево и плоскостью к камере, кисть в правом нижнем углу
+      const K = globalThis.VM_KNIFE_POSE || KNIFE_POSE;
+      this.holder.position.x += K.pos[0] - hip[0]; this.holder.position.y += K.pos[1] - hip[1]; this.holder.position.z += K.pos[2] - hip[2];
+      this.holder.rotation.set(K.rot[0], K.rot[1], K.rot[2]);
+    } else this.holder.rotation.set(0, (1 - a) * 0.06, (1 - a) * 0.03);
     this.pivot.rotation.set(rx, ry, rz);
     this.holder.visible = !scoped;
     if (USE_FP_ARMS) { this.arms.setLeftOffset(this.leftOffset); this.arms.update(!scoped && this.holder.visible); }
@@ -252,7 +261,9 @@ export class ViewModel {
     ch.root.visible = !scoped && this.holder.visible;
     if (!ch.root.visible) return;
     ch.mixer.update(dt * 0.6);
-    for (const [a, h] of [[B.lArm, B.lHand], [B.rArm, B.rHand]]) { a.scale.setScalar(this.armK); h.scale.setScalar(1 / this.armK); }
+    // руки: длиннее (дотянуться до цевья) и тоньше (рукава не заслоняют экран); кисть — нормального размера
+    const T = globalThis.VM_ARM_THIN || 0.72, HS = globalThis.VM_HAND_S || 0.9;
+    for (const [a, f, h] of [[B.lArm, B.lFore, B.lHand], [B.rArm, B.rFore, B.rHand]]) { a.scale.set(T, this.armK, T); f.scale.set(1, 1, 1); h.scale.set(HS / T, HS / this.armK, HS / T); }
     // нож и граната — одной рукой: левая убрана, чтобы не перекрывать обзор
     const oneHand = !this.ud.gripL;
     if (oneHand) B.lArm.scale.setScalar(0.0001);

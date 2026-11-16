@@ -97,10 +97,10 @@ export function finishMaterial(finish, seed = 1) {
   const R = rng(seed * 7919 + 13), nz = noise2(R);
   const px = (fn) => canvasTex((ctx, S) => { const im = ctx.createImageData(S, S); for (let y = 0; y < S; y++) for (let x = 0; x < S; x++) { const [r, g, b] = fn(x / S, y / S); const i = (y * S + x) * 4; im.data[i] = r; im.data[i + 1] = g; im.data[i + 2] = b; im.data[i + 3] = 255; } ctx.putImageData(im, 0, 0); }, 256);
   let m;
-  const std = (o) => new THREE.MeshStandardMaterial({ metalness: 1, roughness: 0.2, envMapIntensity: 1.4, ...o });
+  const std = (o) => new THREE.MeshStandardMaterial({ metalness: 1, roughness: 0.2, envMapIntensity: 2.0, ...o });
   switch (finish) {
     case 'mirror': m = std({ color: 0xe8ecf0, roughness: 0.06 }); break;
-    case 'satin': m = std({ map: texSet('gun_metal').map, color: 0xc8ccd2, roughness: 0.3 }); break;
+    case 'satin': { const gm = texSet('gun_metal'); m = std({ color: 0xd2d6dc, roughness: 0.28, roughnessMap: gm.roughnessMap || null, normalMap: gm.normalMap || null, normalScale: new THREE.Vector2(0.25, 0.25), envMapIntensity: 2.2 }); break; }
     case 'black': m = std({ color: 0x1c1d20, roughness: 0.32, metalness: 0.85 }); break;
     case 'damascus': m = std({ roughness: 0.22, map: px((u, v) => { const w = Math.sin((v * 34 + fbm(nz, u * 3, v * 2) * 9 + u * 6) * 1.0); const k = 0.55 + 0.45 * Math.sign(w) * Math.pow(Math.abs(w), 0.3); return [120 + 110 * k, 124 + 110 * k, 130 + 112 * k]; }) }); break;
     case 'casehard': m = std({ roughness: 0.18, map: px((u, v) => { const a = fbm(nz, u * 2.5, v * 2.5, 5), b = fbm(nz, u * 2 + 7, v * 2 + 3, 5); const blue = [40, 80, 200], gold = [220, 170, 60], purple = [120, 70, 150], steel = [190, 195, 200]; const c = a > 0.55 ? blue : b > 0.58 ? gold : a < 0.38 ? purple : steel; const t = Math.abs(a - 0.5) * 2; return c.map((x, i) => lerp(steel[i], x, Math.min(1, t * 1.6))); }) }); break;
