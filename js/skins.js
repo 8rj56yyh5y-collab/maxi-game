@@ -79,7 +79,11 @@ export function ownedKnives() {
 }
 
 export function caseContents(c) {
-  return Object.values(SKINS).filter(s => c.filter(s) && c.weights[s.rarity] !== undefined);
+  return Object.values(SKINS).filter(s => {
+    if (s.agent && c.id !== 'agents') return false;            // агенты — только в своём кейсе
+    if (!s.agent && !WEAPONS[s.weapon] && !KNIVES[s.weapon]) return false;
+    try { return c.filter(s) && c.weights[s.rarity] !== undefined; } catch (e) { return false; }
+  });
 }
 
 export function rollCase(c) {

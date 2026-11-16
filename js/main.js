@@ -380,7 +380,6 @@ function renderLoadout() {
     return `<button class="wcard ${cur[loSlot] === id ? 'on' : ''} ${locked ? 'locked' : ''}" data-id="${id}">${iconImg(id)}<b>${itemName(id)}</b><small>${w ? CATS[w.cat] : locked ? 'Из кейса «Клинок»' : 'Нож'}</small>${w ? `<span class="price">$${w.price}</span>` : ''}</button>`;
   }).join('');
   $('lo-list').querySelectorAll('.wcard').forEach(b => {
-    b.onmouseenter = () => loInfo(b.dataset.id);
     b.onclick = () => {
       const id = b.dataset.id;
       if (b.classList.contains('locked')) { toast('Этот нож можно получить из кейса «Клинок»'); return; }
