@@ -6,7 +6,7 @@ import { CharacterModel, solveIK, aimBone } from './character.js';
 import { surface } from './textures.js';
 
 // Положение точки хвата относительно глаза
-const HIP = { pistol: [0.1, -0.12, -0.38], smg: [0.105, -0.13, -0.24], rifle: [0.105, -0.135, -0.22], sniper: [0.105, -0.13, -0.2], shotgun: [0.105, -0.13, -0.23], knife: [0.13, -0.13, -0.34], grenade: [0.12, -0.12, -0.3] };
+const HIP = { pistol: [0.11, -0.125, -0.4], smg: [0.125, -0.15, -0.3], rifle: [0.125, -0.155, -0.29], sniper: [0.125, -0.15, -0.26], shotgun: [0.125, -0.15, -0.29], knife: [0.13, -0.13, -0.34], grenade: [0.12, -0.12, -0.3] };
 const sm01 = (x) => { const t = Math.min(1, Math.max(0, x)); return t * t * (3 - 2 * t); };
 const ADS_Z = { pistol: -0.38, smg: -0.15, rifle: -0.14, sniper: -0.1, shotgun: -0.16 };
 

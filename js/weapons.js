@@ -18,8 +18,8 @@ function mats() {
   const detail = (o) => new THREE.MeshStandardMaterial({ normalMap: metalTex.normalMap, normalScale: new THREE.Vector2(0.35, 0.35), ...o });
   // воронёный металл с потёртостями и чёрный полимер (фото-текстуры ambientCG, CC0)
   const gm = texSet('gun_metal'), gp = texSet('gun_poly');
-  M.body = new THREE.MeshStandardMaterial({ map: gp.map, normalMap: gp.normalMap, roughnessMap: gp.roughnessMap, color: 0x9a9a9a, metalness: 0.1, roughness: 0.9, normalScale: new THREE.Vector2(0.8, 0.8), envMapIntensity: 0.9 });
-  M.poly = M.body;
+  M.body = new THREE.MeshStandardMaterial({ map: gm.map, normalMap: gm.normalMap, roughnessMap: gm.roughnessMap, color: 0x55585e, metalness: 0.6, roughness: 0.55, normalScale: new THREE.Vector2(0.6, 0.6), envMapIntensity: 1.15 });
+  M.poly = new THREE.MeshStandardMaterial({ map: gp.map, normalMap: gp.normalMap, roughnessMap: gp.roughnessMap, color: 0x8a8a8a, metalness: 0.05, roughness: 0.85, envMapIntensity: 0.9 });
   M.steelDark = new THREE.MeshStandardMaterial({ map: gm.map, normalMap: gm.normalMap, roughnessMap: gm.roughnessMap, color: 0x6a6c70, metalness: 0.85, roughness: 0.75, envMapIntensity: 1.1 });
   M.steel = new THREE.MeshStandardMaterial({ map: gm.map, normalMap: gm.normalMap, roughnessMap: gm.roughnessMap, color: 0xc8ccd0, metalness: 1, roughness: 0.55, envMapIntensity: 1.2 });
   const wood = texSet('wood2');

@@ -101,12 +101,22 @@ export function followShadow(sun, sunDir, center) {
   sun.target.updateMatrixWorld();
 }
 
+// Финальная цветокоррекция: резкость, контраст, насыщенность, тёплые света / холодные тени, виньетка
 const VignetteShader = {
-  uniforms: { tDiffuse: { value: null }, strength: { value: 0.32 } },
+  uniforms: { tDiffuse: { value: null }, strength: { value: 0.3 }, texel: { value: new THREE.Vector2(1 / 1280, 1 / 720) }, sharp: { value: 0.35 }, contrast: { value: 1.08 }, sat: { value: 1.12 } },
   vertexShader: 'varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.0); }',
-  fragmentShader: `uniform sampler2D tDiffuse; uniform float strength; varying vec2 vUv;
-    void main(){ vec4 c = texture2D(tDiffuse, vUv); vec2 d = vUv - 0.5; float v = 1.0 - dot(d, d) * strength * 2.2;
-    c.rgb *= v; c.rgb = mix(vec3(dot(c.rgb, vec3(0.299,0.587,0.114))), c.rgb, 1.08); gl_FragColor = c; }`,
+  fragmentShader: `uniform sampler2D tDiffuse; uniform float strength, sharp, contrast, sat; uniform vec2 texel; varying vec2 vUv;
+    void main(){
+      vec4 c = texture2D(tDiffuse, vUv);
+      vec3 n = texture2D(tDiffuse, vUv + vec2(texel.x, 0.)).rgb + texture2D(tDiffuse, vUv - vec2(texel.x, 0.)).rgb + texture2D(tDiffuse, vUv + vec2(0., texel.y)).rgb + texture2D(tDiffuse, vUv - vec2(0., texel.y)).rgb;
+      c.rgb = clamp(c.rgb + (c.rgb - n * 0.25) * sharp, 0.0, 1.0);
+      float l = dot(c.rgb, vec3(0.299, 0.587, 0.114));
+      c.rgb = mix(vec3(l), c.rgb, sat);
+      c.rgb = (c.rgb - 0.5) * contrast + 0.5;
+      c.rgb += mix(vec3(-0.012, 0.0, 0.02), vec3(0.025, 0.012, -0.015), smoothstep(0.15, 0.85, l));
+      vec2 d = vUv - 0.5; c.rgb *= 1.0 - dot(d, d) * strength * 2.0;
+      gl_FragColor = vec4(clamp(c.rgb, 0.0, 1.0), c.a);
+    }`,
 };
 
 // Конвейер вывода: мир → оружие в руках → (bloom) → тонмаппинг
@@ -122,9 +132,10 @@ export class Pipeline {
     r.toneMapping = THREE.ACESFilmicToneMapping;
     r.toneMappingExposure = exposure;
     this.dispose(); this.vmPass = null;
-    if (settings.bloom || settings.ao) {
+    const grade = settings.grade !== false && settings.quality !== 'low';
+    if (settings.bloom || settings.ao || grade) {
       const size = r.getDrawingBufferSize(new THREE.Vector2());
-      const rt = new THREE.WebGLRenderTarget(size.x, size.y, { type: THREE.HalfFloatType, samples: 4 });
+      const rt = new THREE.WebGLRenderTarget(size.x, size.y, { type: THREE.HalfFloatType, samples: settings.quality === 'medium' ? 2 : 4 });
       const c = new EffectComposer(r, rt);
       c.addPass(new RenderPass(scene, camera));
       if (vmScene) {
@@ -135,7 +146,7 @@ export class Pipeline {
       if (settings.ao) { const ao = new GTAOPass(scene, camera, size.x, size.y); ao.blendIntensity = 0.8; c.passes.splice(1, 0, ao); ao.renderToScreen = false; this.aoPass = ao; }
       if (settings.bloom) c.addPass(new UnrealBloomPass(new THREE.Vector2(size.x / 2, size.y / 2), 0.3, 0.5, 0.92));
       c.addPass(new OutputPass());
-      c.addPass(new ShaderPass(VignetteShader));
+      const gp = new ShaderPass(VignetteShader); c.addPass(gp); this.gradePass = gp;
       this.composer = c;
       this.resize();
     }
@@ -158,6 +169,7 @@ export class Pipeline {
     const size = this.renderer.getSize(new THREE.Vector2());
     this.composer.setPixelRatio(this.renderer.getPixelRatio());
     this.composer.setSize(size.x, size.y);
+    if (this.gradePass) { const pr = this.renderer.getPixelRatio(); this.gradePass.uniforms.texel.value.set(1 / (size.x * pr), 1 / (size.y * pr)); }
   }
 
   dispose() {

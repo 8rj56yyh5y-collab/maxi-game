@@ -619,6 +619,7 @@ const SETTINGS_TABS = {
     opt('shadows', 'Тени', 'select', { options: [['off', 'Выкл'], ['medium', 'Средние'], ['high', 'Высокие'], ['ultra', 'Ультра']] }),
     opt('texQuality', 'Текстуры', 'select', { options: [['low', 'Низкие'], ['high', 'Высокие']] }),
     opt('antialias', 'Сглаживание (MSAA)', 'bool', { note: () => 'Применяется после перезапуска игры.' }),
+    opt('grade', 'Цветокоррекция и резкость', 'bool'),
     opt('bloom', 'Свечение (Bloom)', 'bool'),
     opt('ao', 'Затенение (GTAO)', 'bool', { note: () => 'Реалистичные тени в углах. Требовательно к видеокарте.' }),
     opt('effects', 'Эффекты', 'select', { options: [['low', 'Низкие'], ['high', 'Высокие']] }),

@@ -31,7 +31,7 @@ const DEFAULTS = {
   joystickFixed: false, sprintJoystick: false,
   // Графика
   preset: 'medium', quality: 'medium', renderScale: 1.0, fpsCap: 0, fov: 80, vmFov: 58,
-  shadows: 'medium', texQuality: 'high', bloom: true, ao: false, effects: 'high', viewDist: 'high', antialias: true, vsyncHint: true,
+  shadows: 'medium', texQuality: 'high', bloom: true, ao: false, grade: true, effects: 'high', viewDist: 'high', antialias: true, vsyncHint: true,
   // Интерфейс
   showFps: true, showPing: false, hudScale: 1.0, radarSize: 1.0, radarZoom: 1.0, radarRotate: true, hitmarkers: true, damageNumbers: true, killfeed: true, bobbing: true,
   // Звук
