@@ -33,7 +33,8 @@ export class ViewModel {
     this.hemi = new THREE.HemisphereLight(0xdfe8f5, 0x5a4a3a, 0.9);
     this.scene.add(this.hemi);
     this.key = new THREE.DirectionalLight(0xfff2dc, 2.2); this.key.position.set(0.6, 1, 0.4); this.scene.add(this.key);
-    const rim = new THREE.DirectionalLight(0xbcd2ff, 0.8); rim.position.set(-0.8, 0.3, -0.6); this.scene.add(rim);
+    const rim = new THREE.DirectionalLight(0xbcd2ff, 1.3); rim.position.set(-0.8, 0.5, -0.6); this.scene.add(rim);
+    const fill = new THREE.DirectionalLight(0xffffff, 0.6); fill.position.set(-0.3, 0.2, 1); this.scene.add(fill);
     this.holder = new THREE.Group(); this.scene.add(this.holder);
     this.pivot = new THREE.Group(); this.holder.add(this.pivot);
     // вспышка
@@ -60,7 +61,8 @@ export class ViewModel {
 
   setEnvironment(env, sunColor, intensity = 0.6) {
     this.scene.environment = env;
-    this.scene.environmentIntensity = intensity;
+    // оружие в руках всегда получает достаточно отражений — металл не превращается в «чёрный пластик»
+    this.scene.environmentIntensity = Math.max(0.85, intensity);
     if (sunColor !== undefined) this.key.color.set(sunColor);
   }
 
@@ -240,7 +242,9 @@ export class ViewModel {
     this.body.gun.visible = false;
     const B = this.body.bones;
     B.head.scale.setScalar(0.001);
-    this.body.root.traverse(o => { if (o.isMesh) { o.castShadow = false; o.receiveShadow = false; if (/visor/i.test(o.name) || /Visor/.test(o.material.name)) o.visible = false; } });
+    this.body.root.traverse(o => { if (o.isMesh) { o.castShadow = false; o.receiveShadow = false; if (/visor/i.test(o.name) || /Visor/.test(o.material.name)) o.visible = false;
+      // от первого лица — тёмная тактическая форма в цвет команды (без «бежевого» оттенка)
+      else if (o.material && o.material.color) { o.material.color.set(team === 'B' ? 0x4f4a3a : 0x343d4a); o.material.roughness = 0.85; o.material.envMapIntensity = 0.6; } } });
     B.neck = this.body.model.getObjectByName('mixamorigNeck');
     if (B.neck) B.neck.scale.setScalar(0.001);
     this.scene.add(this.body.root);
