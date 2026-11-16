@@ -110,7 +110,7 @@ export class Game {
     const playerTeam = this.cfg.side === 'B' ? 'B' : this.cfg.side === 'A' ? 'A' : (Math.random() < 0.5 ? 'A' : 'B');
     const mk = (team, isPlayer) => {
       const a = {
-        id: this.actors.length, name: isPlayer ? (settings.nickname || 'Игрок') : names[ni++ % names.length], team, isPlayer,
+        id: this.actors.length, name: isPlayer ? (settings.matchName || settings.nickname || 'Игрок') : names[ni++ % names.length], team, isPlayer,
         pos: new THREE.Vector3(), vel: new THREE.Vector3(), yaw: 0, pitch: 0,
         radius: 0.35, height: 1.8, onGround: true, crouchT: 0,
         health: 100, armor: 0, helmet: false, defuseKit: false, alive: false,

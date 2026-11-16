@@ -5,8 +5,8 @@ import { A, texSet } from './assets.js';
 import { buildWeaponModel } from './weapons.js';
 
 export const TEAM_STYLE = {
-  A: { name: 'Спецназ', tint: 0x6a80a3, visor: 0x49a8ff, uniform: 0x3c4756, gear: 0x262b31, glove: 0x18191b, accent: 0x2ec4ff },
-  B: { name: 'Наёмники', tint: 0xc9a77c, visor: 0xff7a3c, uniform: 0x6b5d45, gear: 0x3c3226, glove: 0x2e2419, accent: 0xff7a3c },
+  A: { name: 'Спецназ', tint: 0x55606e, visor: 0x49a8ff, uniform: 0x3c4756, gear: 0x262b31, glove: 0x18191b, accent: 0x2ec4ff },
+  B: { name: 'Наёмники', tint: 0x6f6b52, visor: 0xff7a3c, uniform: 0x6b5d45, gear: 0x3c3226, glove: 0x2e2419, accent: 0xff7a3c },
 };
 const FFA_TINTS = [0xc07070, 0x70c088, 0xa070c0, 0xc0b070, 0x70b8c0, 0xc09070, 0x8088c0, 0xc070b0, 0x98c070, 0xc07088, 0x7088c0];
 
@@ -166,13 +166,14 @@ export class CharacterModel {
     // модель Soldier уже смотрит в -Z (наше «вперёд»)
     this.body.add(model);
     const tint = ffaIndex >= 0 ? FFA_TINTS[ffaIndex % FFA_TINTS.length] : st.tint;
+    this.shade = 0.82 + Math.random() * 0.3;
     model.traverse(o => {
       if (o.isMesh) {
         o.castShadow = true; o.receiveShadow = true; o.frustumCulled = false;
         const m = o.material.clone();
         if (/Visor/.test(m.name)) { m.color.set(st.visor); m.emissive = new THREE.Color(st.visor); m.emissiveIntensity = 0.35; m.metalness = 0.6; m.roughness = 0.2; }
         else {
-          m.color.set(tint); m.roughness = Math.max(0.6, m.roughness || 0.7);
+          m.color.set(tint).multiplyScalar(this.shade); m.roughness = Math.max(0.6, m.roughness || 0.7);
           // микрорельеф ткани поверх исходной текстуры
           m.normalMap = clothNormal(); m.normalScale = new THREE.Vector2(0.7, 0.7);
         }
@@ -214,6 +215,7 @@ export class CharacterModel {
     const w = buildWeaponModel(id, skin);
     this.gun.add(w);
     this.gunModel = w;
+    this.gun.scale.setScalar(w.userData && w.userData.proc ? 1.3 : 1);
     this.muzzle = w.userData.muzzle;
   }
 
@@ -273,6 +275,14 @@ export class CharacterModel {
       bone.updateMatrixWorld(true);
     }
 
+    // наклон корпуса при стрейфе
+    const lat = right.x * a.vel.x + right.z * a.vel.z;
+    this.lean = (this.lean || 0) + (THREE.MathUtils.clamp(-lat * 0.035, -0.16, 0.16) - (this.lean || 0)) * Math.min(1, dt * 8);
+    if (Math.abs(this.lean) > 0.002) {
+      B.spine.getWorldQuaternion(_q2); _q1.setFromAxisAngle(fwdV, this.lean); _q2.premultiply(_q1);
+      B.spine.parent.getWorldQuaternion(_q3).invert(); B.spine.quaternion.copy(_q3.multiply(_q2)); B.spine.updateMatrixWorld(true);
+    }
+
     // рывок от попадания
     if (this.hitT > 0) {
       this.hitT = Math.max(0, this.hitT - dt * 5);
@@ -297,7 +307,14 @@ export class CharacterModel {
     _q2.setFromEuler(_e);
     const kickBack = Math.max(0, (a.lastShotT || -9) + 0.09 - (a.timeRef || 0)) * 0.5;
     const offW = off.clone().add(new THREE.Vector3(0, 0, kickBack)).applyQuaternion(_q2);
-    const gunWorld = chest.add(offW).add(new THREE.Vector3(0, 0.1, 0));
+    let gunWorld = chest.clone().add(offW).add(new THREE.Vector3(0, 0.1, 0));
+    // винтовки и ПП: приклад упирается в правое плечо
+    if (ud && ud.box && !isPistol && !ud.knife && !ud.grenade) {
+      const sc = this.gun.scale.x;
+      const pocket = B.spine2.getWorldPosition(new THREE.Vector3()).addScaledVector(right, 0.13).add(new THREE.Vector3(0, 0.125, 0)).addScaledVector(fwdV, 0.06 - kickBack);
+      const anchor = new THREE.Vector3(0, (ud.gripR ? ud.gripR.y : 0) + 0.06, ud.box.max.z).multiplyScalar(sc).applyQuaternion(_q2);
+      gunWorld = pocket.sub(anchor);
+    }
     this.gun.position.copy(r.worldToLocal(gunWorld));
     this.gun.rotation.set(pitch, 0, 0);
     this.gun.updateMatrixWorld(true);

@@ -10,6 +10,7 @@ import { DIFFICULTY } from './bots.js';
 import { profile, saveProfile, SKINS, equip, equippedSkin, openCase, buyCase, casePrice, caseContents, sellSkin, ownedKnives, buyStoreItem, dailyAvailable, claimDaily, weaponAvailableFor, passLevel, claimPass } from './skins.js';
 import { skinPreviewURL } from './textures.js';
 import { fxTime } from './skinart.js';
+import { avatarHTML, setAvatarFromFile, setAvatarEmblem, emblemSVG, EMBLEM_ICONS, EMBLEM_COLORS, CLAN_LIST, CLAN_ROLES, createClan, joinClan, leaveClan, clanXpNeed, clanMatchXp, clanTag } from './social.js';
 import { CharacterModel } from './character.js';
 import { buildWeaponModel } from './weapons.js';
 import { setupAtmosphere, followShadow, Pipeline } from './render.js';
@@ -261,7 +262,7 @@ function goto(name) {
   document.querySelectorAll('#nav button').forEach(b => b.classList.toggle('on', b.dataset.goto === name));
   setLobbyMode(['loadout', 'inventory', 'cases'].includes(name) ? 'weapon' : 'char');
   renderTopbar();
-  ({ pass: renderPass, play: renderPlay, loadout: renderLoadout, inventory: renderInventory, cases: renderCases, store: renderStore, profile: renderProfile, settings: renderSettings }[name] || (() => {}))();
+  ({ pass: renderPass, play: renderPlay, loadout: renderLoadout, inventory: renderInventory, cases: renderCases, store: renderStore, profile: renderProfile, clan: renderClan, settings: renderSettings }[name] || (() => {}))();
 }
 document.querySelectorAll('[data-goto]').forEach(b => b.addEventListener('click', () => goto(b.dataset.goto)));
 
@@ -272,7 +273,7 @@ function renderTopbar() {
   $('lvl').textContent = 'Ур. ' + li.level; $('rank').textContent = li.rank;
   $('xp-fill').style.width = (li.cur / li.need * 100) + '%';
   $('tb-rank').innerHTML = rankBadge(profile.rating || 0, 40);
-  $('nick').textContent = settings.nickname; $('avatar').textContent = (settings.nickname || 'M')[0].toUpperCase();
+  $('nick').textContent = clanTag() + settings.nickname; $('avatar').innerHTML = avatarHTML(settings.nickname, 42);
 }
 
 // ---------- Экран «Играть» ----------
@@ -544,6 +545,43 @@ function renderStore() {
 }
 
 // ---------- Профиль ----------
+// ---------- Клан ----------
+let clanForm = { icon: 'shield', color: 0 };
+function renderClan() {
+  setLobbyMode('char');
+  const c = profile.clan;
+  if (!c) {
+    $('clan-panel').innerHTML = `<div class="panel-head"><h2>Кланы</h2><span class="hint">Играйте вместе, качайте клан, носите тег перед ником</span></div>
+      <div class="clan-cols"><div class="card clan-create"><div class="card-title">Создать клан</div>
+        <div class="clan-preview">${emblemSVG(clanForm.icon, EMBLEM_COLORS[clanForm.color], 72, 'shield')}<div><b id="cp-name">${esc(clanForm.name || 'Новый клан')}</b><small>[${esc(clanForm.tag || 'TAG')}]</small></div></div>
+        <input id="cl-name" maxlength="24" placeholder="Название (3–24 символа)" value="${esc(clanForm.name || '')}">
+        <input id="cl-tag" maxlength="5" placeholder="Тег (2–5 букв)" value="${esc(clanForm.tag || '')}">
+        <input id="cl-motto" maxlength="60" placeholder="Девиз" value="${esc(clanForm.motto || '')}">
+        <div class="card-title" style="margin-top:6px">Эмблема</div>
+        <div class="av-pick">${Object.keys(EMBLEM_ICONS).map(ic => `<button class="av-em ${clanForm.icon === ic ? 'on' : ''}" data-ic="${ic}">${emblemSVG(ic, EMBLEM_COLORS[clanForm.color], 38, 'shield')}</button>`).join('')}</div>
+        <div class="seg" style="margin:8px 0">${EMBLEM_COLORS.map((cc, i) => `<button class="clr ${clanForm.color === i ? 'on' : ''}" data-c="${i}" style="background:linear-gradient(135deg,${cc[0]},${cc[1]})"></button>`).join('')}</div>
+        <button class="play-btn small" id="cl-create">Создать · 0 ₴</button></div>
+      <div class="card clan-join"><div class="card-title">Вступить в клан</div>${CLAN_LIST.map((k, i) => `<div class="clan-row">${emblemSVG(k.icon, EMBLEM_COLORS[k.color], 46, 'shield')}<div class="cr-info"><b>${esc(k.name)} <small>[${k.tag}]</small></b><span>«${esc(k.motto)}»</span><small>Ур. ${k.level} · ${k.size}/50 · от ${k.minRank}</small></div><button class="btn" data-join="${i}">Вступить</button></div>`).join('')}</div></div>`;
+    const keep = () => { clanForm.name = $('cl-name').value; clanForm.tag = $('cl-tag').value.toUpperCase(); clanForm.motto = $('cl-motto').value; };
+    ['cl-name', 'cl-tag'].forEach(id => $(id).oninput = () => { keep(); $('cp-name').textContent = clanForm.name || 'Новый клан'; $('cp-name').nextElementSibling.textContent = `[${clanForm.tag || 'TAG'}]`; });
+    $('clan-panel').querySelectorAll('.av-em').forEach(b => b.onclick = () => { keep(); clanForm.icon = b.dataset.ic; renderClan(); });
+    $('clan-panel').querySelectorAll('.clr').forEach(b => b.onclick = () => { keep(); clanForm.color = +b.dataset.c; renderClan(); });
+    $('cl-create').onclick = () => { keep(); try { createClan(clanForm); sound.reward(); toast('Клан создан'); renderTopbar(); renderClan(); } catch (e) { toast(e.message); } };
+    $('clan-panel').querySelectorAll('[data-join]').forEach(b => b.onclick = () => { joinClan(CLAN_LIST[+b.dataset.join]); sound.reward(); toast('Вы вступили в клан'); renderTopbar(); renderClan(); });
+    return;
+  }
+  const need = clanXpNeed(c.level);
+  const members = [{ name: settings.nickname, role: c.role, rating: profile.rating || 0, online: true, contrib: 0, me: true }, ...c.members].sort((a, b) => Object.keys(CLAN_ROLES).indexOf(a.role) - Object.keys(CLAN_ROLES).indexOf(b.role));
+  $('clan-panel').innerHTML = `<div class="clan-head">${emblemSVG(c.icon, EMBLEM_COLORS[c.color], 96, 'shield')}<div class="ch-info"><h2>${esc(c.name)} <small>[${esc(c.tag)}]</small></h2><p>«${esc(c.motto || 'Без девиза')}»</p>
+      <div class="ch-lvl"><b>Уровень ${c.level}</b><div class="pw-bar"><i style="width:${c.xp / need * 100}%"></i></div><small>${c.xp} / ${need} опыта клана · за каждый матч клан получает опыт</small></div></div>
+      <div class="ch-stats"><div>Участников<b>${members.length}</b></div><div>В сети<b>${members.filter(m => m.online).length}</b></div><div>Ваша роль<b>${CLAN_ROLES[c.role]}</b></div></div></div>
+    <div class="clan-cols"><div class="card"><div class="card-title">Состав</div><div class="clan-members">${members.map(m => `<div class="cm ${m.me ? 'me' : ''}"><i class="dot ${m.online ? 'on' : ''}"></i><b>${esc(m.name)}</b><span class="role r-${m.role}">${CLAN_ROLES[m.role]}</span><span class="cm-rank">${rankBadge(m.rating, 22)}${rankOf(m.rating).name}</span></div>`).join('')}</div></div>
+      <div class="card"><div class="card-title">Журнал клана</div><div class="clan-log">${c.log.slice().reverse().map(l => `<div><small>${new Date(l.t).toLocaleDateString('ru')}</small> ${esc(l.text)}</div>`).join('')}</div>
+        <div class="card-title" style="margin-top:12px">Бонусы уровня</div><div class="hint">Ур. 5: +5% кредитов за матч · Ур. 10: клановый кейс раз в день · Ур. 20: золотая рамка тега</div>
+        <button class="btn danger" id="cl-leave" style="margin-top:14px">${c.role === 'leader' ? 'Распустить клан' : 'Покинуть клан'}</button></div></div>`;
+  $('cl-leave').onclick = () => { leaveClan(); toast('Вы покинули клан'); renderTopbar(); renderClan(); };
+}
+
 function renderProfile() {
   setLobbyMode('char');
   const s = profile.stats, li = levelInfo(profile.xp || 0);
@@ -551,14 +589,19 @@ function renderProfile() {
   const hs = s.kills ? Math.round(s.headshots / s.kills * 100) : 0;
   const wr = s.matches ? Math.round(s.wins / s.matches * 100) : 0;
   const top = Object.entries(s.perWeapon || {}).sort((a, b) => b[1] - a[1]).slice(0, 5);
-  $('profile-panel').innerHTML = `<div class="prof-head"><div class="avatar">${esc((settings.nickname || 'M')[0].toUpperCase())}</div><div><h2>${esc(settings.nickname)}</h2><div class="hint">Уровень ${li.level} · ${li.rank} · ${li.cur}/${li.need} опыта</div></div></div>
+  $('profile-panel').innerHTML = `<div class="prof-head"><div class="avatar big">${avatarHTML(settings.nickname, 72)}</div><div><h2>${esc(clanTag() + settings.nickname)}</h2><div class="hint">Уровень ${li.level} · ${li.rank} · ${li.cur}/${li.need} опыта</div></div></div>
     <div class="nick-row" style="margin-bottom:14px"><input id="nick-in" maxlength="16" value="${esc(settings.nickname)}"><button class="btn ghost" id="nick-save">Сменить ник</button></div>
+    <div class="card-title">Аватар</div>
+    <div class="av-pick"><label class="btn ghost av-up">Загрузить фото<input type="file" id="av-file" accept="image/*" hidden></label>
+      ${Object.keys(EMBLEM_ICONS).map((ic, i) => `<button class="av-em ${profile.avatarEmblem && profile.avatarEmblem.icon === ic ? 'on' : ''}" data-ic="${ic}" data-c="${i % EMBLEM_COLORS.length}">${emblemSVG(ic, EMBLEM_COLORS[i % EMBLEM_COLORS.length], 44, 'circle')}</button>`).join('')}</div>
     <div class="stat-grid"><div>Матчей<b>${s.matches}</b></div><div>Победы<b>${wr}%</b></div><div>Убийства<b>${s.kills}</b></div><div>Смерти<b>${s.deaths}</b></div><div>K/D<b>${kd}</b></div><div>Хедшоты<b>${hs}%</b></div><div>Урон<b>${Math.round(s.damage || 0)}</b></div><div>Закладок<b>${s.plants}</b></div><div>Разминирований<b>${s.defuses}</b></div><div>Скинов<b>${profile.owned.length}</b></div></div>
     <div class="card-title">Любимое оружие</div>
     <div class="lo-list">${top.length ? top.map(([id, n]) => `<div class="wcard">${iconImg(id)}<b>${itemName(id)}</b><small>${n} убийств</small></div>`).join('') : '<p class="hint">Сыграйте матч, чтобы появилась статистика.</p>'}</div>
     <div class="card-title" style="margin-top:14px">Последние матчи</div>
     <div>${(profile.history || []).slice(-8).reverse().map(h => `<div class="set-row"><span style="width:110px;color:${h.win ? 'var(--ok)' : h.draw ? '#ccc' : 'var(--danger)'};font-weight:700">${h.win ? 'Победа' : h.draw ? 'Ничья' : 'Поражение'}</span><span style="width:170px">${MODES[h.mode] ? MODES[h.mode].name : h.mode}</span><span style="width:90px">${MAPS[h.map] ? MAPS[h.map].name : ''}</span><span>${h.k}/${h.d} · ${h.score}</span></div>`).join('') || '<p class="hint">История пуста.</p>'}</div>`;
   $('nick-save').onclick = () => { const v = $('nick-in').value.trim().slice(0, 16); if (v) { settings.nickname = v; saveSettings(); renderTopbar(); renderProfile(); toast('Ник изменён'); } };
+  $('av-file').onchange = (e) => { setAvatarFromFile(e.target.files[0]).then(() => { renderTopbar(); renderProfile(); toast('Аватар обновлён'); }).catch(err => toast(err.message)); };
+  $('profile-panel').querySelectorAll('.av-em').forEach(b => b.onclick = () => { setAvatarEmblem(b.dataset.ic, +b.dataset.c); sound.uiClick(); renderTopbar(); renderProfile(); });
 }
 
 // ---------- Настройки ----------
@@ -808,6 +851,7 @@ async function startMatch() {
   $('hud').classList.toggle('touch', input.touch);
   input.buildTouchUI($('touch-ui'));
   hud.applyCrosshair();
+  settings.matchName = clanTag() + (settings.nickname || 'Игрок');
   const cfg = m.mode === 'ranked' ? { ...m, mode: 'defuse', ranked: true, rounds: 12, perTeam: 5, side: 'auto', difficulty: rankOf(profile.rating || 0).bots } : { ...m };
   game = new Game(renderer, input, hud, cfg, { onEnd: onMatchEnd, onBuyMenu: () => toggleBuy(), isBuyOpen }, hdri);
   hud.setMoney(cfg.mode === 'defuse' ? game.player.money : null);
@@ -864,7 +908,8 @@ function onMatchEnd({ win, draw, earned, xp, player, game: g }) {
   const lvlReward = after > before ? (after - before) : 0;
   if (lvlReward) { profile.gold += 50 * lvlReward; profile.cases.field = (profile.cases.field || 0) + lvlReward; }
   profile.passXp = (profile.passXp || 0) + xp;
-  let rankHtml = '';
+  const clanXp = clanMatchXp(!!win, player ? player.kills : 0);
+  let rankHtml = clanXp ? `<div class="hint" style="margin-top:6px">Клан [${esc(profile.clan.tag)}]: +${clanXp} опыта</div>` : '';
   if (g.cfg.ranked) {
     const before = profile.rating || 0;
     const perf = Math.min(10, player.kills) + Math.min(5, player.assists);
@@ -873,7 +918,7 @@ function onMatchEnd({ win, draw, earned, xp, player, game: g }) {
     profile.rankedPlayed = (profile.rankedPlayed || 0) + 1; if (win) profile.rankedWins = (profile.rankedWins || 0) + 1;
     profile.bestRating = Math.max(profile.bestRating || 0, profile.rating);
     const r0 = rankOf(before), r1 = rankOf(profile.rating);
-    rankHtml = `<div class="rank-box" style="justify-content:center">${rankBadge(profile.rating, 72)}<div style="text-align:left"><b style="color:${r1.color}">${r1.name}</b><div class="rank-delta ${delta >= 0 ? 'up' : 'down'}">${delta >= 0 ? '+' : ''}${delta} RP</div>${r0.name !== r1.name ? `<div class="hint">${r1.tier > r0.tier || (r1.tier === r0.tier && r1.div < r0.div) ? 'Повышение звания!' : 'Понижение звания'}</div>` : ''}</div></div>`;
+    rankHtml += `<div class="rank-box" style="justify-content:center">${rankBadge(profile.rating, 72)}<div style="text-align:left"><b style="color:${r1.color}">${r1.name}</b><div class="rank-delta ${delta >= 0 ? 'up' : 'down'}">${delta >= 0 ? '+' : ''}${delta} RP</div>${r0.name !== r1.name ? `<div class="hint">${r1.tier > r0.tier || (r1.tier === r0.tier && r1.div < r0.div) ? 'Повышение звания!' : 'Понижение звания'}</div>` : ''}</div></div>`;
   }
   const st = profile.stats;
   st.kills += player.kills; st.deaths += player.deaths; st.headshots += player.headshots; st.matches++; st.damage = (st.damage || 0) + player.damage; if (win) st.wins++;

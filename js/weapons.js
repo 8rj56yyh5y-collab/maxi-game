@@ -23,7 +23,7 @@ function mats() {
   M.steelDark = new THREE.MeshStandardMaterial({ map: gm.map, normalMap: gm.normalMap, roughnessMap: gm.roughnessMap, color: 0x6a6c70, metalness: 0.85, roughness: 0.75, envMapIntensity: 1.1 });
   M.steel = new THREE.MeshStandardMaterial({ map: gm.map, normalMap: gm.normalMap, roughnessMap: gm.roughnessMap, color: 0xc8ccd0, metalness: 1, roughness: 0.55, envMapIntensity: 1.2 });
   const wood = texSet('wood2');
-  M.wood = new THREE.MeshStandardMaterial({ map: wood.map, normalMap: wood.normalMap, color: 0xb08060, metalness: 0, roughness: 0.55 });
+  M.wood = new THREE.MeshStandardMaterial({ map: wood.map, normalMap: wood.normalMap, roughnessMap: wood.roughnessMap, color: 0x7a4a2c, metalness: 0, roughness: 0.48, envMapIntensity: 0.9 });
   M.brass = new THREE.MeshStandardMaterial({ color: 0xc9a043, metalness: 1, roughness: 0.3 });
   M.red = new THREE.MeshStandardMaterial({ color: 0x8e2a1e, metalness: 0.05, roughness: 0.6 });
   M.rubber = new THREE.MeshStandardMaterial({ color: 0x111214, roughness: 0.92 });
