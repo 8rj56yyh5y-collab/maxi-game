@@ -303,8 +303,8 @@ export const REAL_MAPS = {
     ],
     ground: 'T|ph_asphalt_02|ffffff|6',
     skyImage: 'assets/hdri/sky_partly_cloudy.jpg', hdri: 'kloofendal_48d_partly_cloudy_puresky_1k',
-    sky: { elevation: 48, azimuth: 56, turbidity: 3, rayleigh: 1, mie: 0.005, exposure: 0.62 },
-    sun: 0xfff1de, sunI: 3.4, hemi: [0xc4d4ea, 0x6a645c, 0.35], fog: [0xb9c6d4, 0.0045], envI: 0.85,
+    sky: { elevation: 48, azimuth: 56, turbidity: 3, rayleigh: 1, mie: 0.005, exposure: 0.8 },
+    sun: 0xfff1de, sunI: 3.8, hemi: [0xc4d4ea, 0x8a7a68, 0.7], fog: [0xc4d0dc, 0.0035], envI: 1.15,
     sites: { A: [-26, 27, 5], B: [-26, -27, 5] },
   },
   quarter: {
@@ -321,8 +321,8 @@ export const REAL_MAPS = {
       'modular_street_seating', 'shrub_01', 'shrub_02'],
     ground: 'T|ph_cobblestone_floor_08|ffffff|3',
     skyImage: 'assets/hdri/sky_clear.jpg', hdri: 'kloofendal_43d_clear_puresky_1k',
-    sky: { elevation: 43, azimuth: 54, turbidity: 3, rayleigh: 1, mie: 0.005, exposure: 0.6 },
-    sun: 0xfff3e2, sunI: 3.6, hemi: [0xc8d8f0, 0x6a645c, 0.35], fog: [0xc2d2e6, 0.004], envI: 0.85,
+    sky: { elevation: 43, azimuth: 54, turbidity: 3, rayleigh: 1, mie: 0.005, exposure: 0.8 },
+    sun: 0xfff3e2, sunI: 3.9, hemi: [0xc8d8f0, 0x8a7a68, 0.7], fog: [0xc8d6e8, 0.0032], envI: 1.15,
     sites: { A: [-3, 27, 5], B: [-26, -28, 5] },
   },
 };

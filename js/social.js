@@ -55,19 +55,19 @@ export function setAvatarFromFile(file) {
 export function setAvatarEmblem(icon, color) { profile.avatarEmblem = { icon, color }; profile.avatarImg = null; saveProfile(); }
 
 // ---------- Кланы ----------
-const BOT_NAMES = ['Ворон', 'Тень', 'Сокол', 'Призрак', 'Гром', 'Север', 'Кобра', 'Шторм', 'Рысь', 'Феникс', 'Барс', 'Викинг', 'Шаман', 'Медведь', 'Дизель', 'Сапёр', 'Ястреб', 'Беркут', 'Гюрза', 'Каспер'];
+const BOT_NAMES = ['Raven', 'Shadow', 'Falcon', 'Ghost', 'Thunder', 'North', 'Cobra', 'Storm', 'Lynx', 'Phoenix', 'Panther', 'Viking', 'Shaman', 'Grizzly', 'Diesel', 'Sapper', 'Hawk', 'Eagle', 'Viper', 'Casper', 'Reaper', 'Nova', 'Rogue', 'Blaze'];
 const ROLES = { leader: 'Лидер', officer: 'Офицер', veteran: 'Ветеран', member: 'Боец', recruit: 'Новобранец' };
 export { ROLES as CLAN_ROLES };
 function rnd(seed) { let s = seed >>> 0 || 1; return () => (s = (s * 16807) % 2147483647) / 2147483647; }
 
 // Кланы, в которые можно вступить
 export const CLAN_LIST = [
-  { name: 'Северные Волки', tag: 'NWLF', motto: 'Стая сильна волком, волк силён стаей', icon: 'wolf', color: 1, level: 14, size: 28, minRank: 'Серебро' },
-  { name: 'Феникс', tag: 'PHX', motto: 'Восстаём из пепла', icon: 'flame', color: 6, level: 22, size: 45, minRank: 'Золото' },
-  { name: 'Чёрная Корона', tag: 'CRWN', motto: 'Только победа', icon: 'crown', color: 0, level: 31, size: 50, minRank: 'Платина' },
-  { name: 'Призраки', tag: 'GHST', motto: 'Нас не видно, пока не поздно', icon: 'skull', color: 5, level: 9, size: 17, minRank: 'Бронза' },
-  { name: 'Молния', tag: 'BOLT', motto: 'Быстрее пули', icon: 'bolt', color: 7, level: 18, size: 33, minRank: 'Серебро' },
-  { name: 'Снайперский Клуб', tag: 'SNPR', motto: 'Один выстрел — один фраг', icon: 'target', color: 3, level: 12, size: 21, minRank: 'Бронза' },
+  { name: 'North Wolves', tag: 'NWLF', motto: 'The strength of the pack is the wolf', icon: 'wolf', color: 1, level: 14, size: 28, minRank: 'Серебро' },
+  { name: 'Phoenix Rising', tag: 'PHX', motto: 'Rise from the ashes', icon: 'flame', color: 6, level: 22, size: 45, minRank: 'Золото' },
+  { name: 'Black Crown', tag: 'CRWN', motto: 'Victory only', icon: 'crown', color: 0, level: 31, size: 50, minRank: 'Платина' },
+  { name: 'Ghost Squad', tag: 'GHST', motto: 'Unseen until it is too late', icon: 'skull', color: 5, level: 9, size: 17, minRank: 'Бронза' },
+  { name: 'Lightning', tag: 'BOLT', motto: 'Faster than a bullet', icon: 'bolt', color: 7, level: 18, size: 33, minRank: 'Серебро' },
+  { name: 'Sniper Club', tag: 'SNPR', motto: 'One shot, one kill', icon: 'target', color: 3, level: 12, size: 21, minRank: 'Бронза' },
 ];
 
 function genMembers(seed, n, leaderName) {
@@ -80,16 +80,17 @@ function genMembers(seed, n, leaderName) {
 }
 
 export function createClan({ name, tag, motto, icon, color }) {
-  name = (name || '').trim().slice(0, 24); tag = (tag || '').trim().toUpperCase().replace(/[^A-ZА-Я0-9]/g, '').slice(0, 5);
-  if (name.length < 3) throw new Error('Название клана — от 3 символов');
-  if (tag.length < 2) throw new Error('Тег клана — от 2 символов');
+  name = (name || '').trim().replace(/[^A-Za-z0-9 _.\-]/g, '').slice(0, 24); tag = (tag || '').trim().toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 5);
+  if (/[^\x20-\x7e]/.test(motto || '')) motto = '';
+  if (name.length < 3) throw new Error('Название клана — от 3 латинских символов');
+  if (tag.length < 2) throw new Error('Тег клана — от 2 латинских букв или цифр');
   profile.clan = { name, tag, motto: (motto || '').slice(0, 60), icon: icon || 'shield', color: color || 0, level: 1, xp: 0, created: Date.now(), role: 'leader',
-    members: genMembers(Date.now() % 100000, 3).map((m, i) => ({ ...m, role: i === 0 ? 'officer' : 'recruit' })), log: [{ t: Date.now(), text: `Клан «${name}» основан` }] };
+    members: genMembers(Date.now() % 100000, 3).map((m, i) => ({ ...m, role: i === 0 ? 'officer' : 'recruit' })), log: [{ t: Date.now(), text: `Clan ${name} founded` }] };
   saveProfile();
   return profile.clan;
 }
 export function joinClan(c) {
-  profile.clan = { ...c, xp: Math.floor(c.level * 400 * 0.4), role: 'recruit', created: Date.now(), members: genMembers(c.tag.length * 7919 + c.level, Math.min(24, c.size)), log: [{ t: Date.now(), text: 'Вы вступили в клан' }] };
+  profile.clan = { ...c, xp: Math.floor(c.level * 400 * 0.4), role: 'recruit', created: Date.now(), members: genMembers(c.tag.length * 7919 + c.level, Math.min(24, c.size)), log: [{ t: Date.now(), text: 'You joined the clan' }] };
   saveProfile();
 }
 export function leaveClan() { profile.clan = null; saveProfile(); }
@@ -99,7 +100,7 @@ export function clanMatchXp(won, kills) {
   const c = profile.clan; if (!c) return 0;
   const xp = 40 + kills * 6 + (won ? 60 : 0);
   c.xp += xp;
-  while (c.xp >= clanXpNeed(c.level)) { c.xp -= clanXpNeed(c.level); c.level++; c.log.push({ t: Date.now(), text: `Клан достиг ${c.level} уровня` }); }
+  while (c.xp >= clanXpNeed(c.level)) { c.xp -= clanXpNeed(c.level); c.level++; c.log.push({ t: Date.now(), text: `Clan reached level ${c.level}` }); }
   if (c.log.length > 30) c.log.splice(0, c.log.length - 30);
   saveProfile();
   return xp;

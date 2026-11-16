@@ -42,7 +42,7 @@ const DEFAULTS = {
   // Матч
   match: { mode: 'defuse', map: 'factory', perTeam: 5, difficulty: 'normal', killsToWin: 40, minutes: 8, rounds: 12 },
   // Профиль
-  nickname: 'Игрок',
+  nickname: 'Player',
 };
 
 function deepMerge(base, over) {
