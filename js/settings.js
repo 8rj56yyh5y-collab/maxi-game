@@ -94,3 +94,11 @@ export function isTouchMode() {
   if (settings.controls === 'mouse') return false;
   return ('ontouchstart' in window) || (navigator.maxTouchPoints > 0 && matchMedia('(pointer: coarse)').matches);
 }
+
+// Первый запуск: подбираем качество под устройство (ПК — высокое, мощный телефон — среднее)
+if (!hadSavedSettings) {
+  const touch = typeof window !== 'undefined' && (('ontouchstart' in window) || navigator.maxTouchPoints > 0);
+  const cores = (typeof navigator !== 'undefined' && navigator.hardwareConcurrency) || 4;
+  const preset = !touch && cores >= 4 ? 'high' : touch && cores >= 8 ? 'medium' : touch ? 'medium' : 'medium';
+  Object.assign(settings, PRESETS[preset]); settings.preset = preset;
+}

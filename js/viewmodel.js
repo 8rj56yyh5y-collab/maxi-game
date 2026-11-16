@@ -22,6 +22,9 @@ function sleeveMaterial(color) {
   return new THREE.MeshStandardMaterial({ color, normalMap: clothMat.normalMap, roughness: 0.92 });
 }
 
+import { FPArms } from './fparms.js';
+const USE_FP_ARMS = false; // процедурные руки — в разработке
+
 export class ViewModel {
   constructor() {
     this.scene = new THREE.Scene();
@@ -51,6 +54,7 @@ export class ViewModel {
     this.t = 0; this.kick = 0; this.kickRot = 0; this.swayX = 0; this.swayY = 0;
     this.switchT = 0; this.reloadT = 0; this.reloadDur = 1; this.knifeT = 0; this.flashT = 0; this.aimT = 0; this.boltT = 0; this.throwT = 0;
     this.inspectT = 0;
+    this.arms = new FPArms(this.scene);
   }
 
   setEnvironment(env, sunColor, intensity = 0.6) {
@@ -72,6 +76,7 @@ export class ViewModel {
     this.ud = ud;
     this.sightOff = (ud.sightY || 0) - (ud.gripR ? ud.gripR.y : 0);
     this.ensureBody(team);
+    if (USE_FP_ARMS) { if (this.body) this.body.root.visible = false; this.arms.build(gun, ud, this.cat, team || 'A'); } else this.arms.clear();
     this.leftOffset = new THREE.Vector3();
     this.muzzle = ud.muzzle;
     this.muzzle.add(this.flash);
@@ -202,7 +207,8 @@ export class ViewModel {
     this.holder.rotation.set(0, (1 - a) * 0.06, (1 - a) * 0.03);
     this.pivot.rotation.set(rx, ry, rz);
     this.holder.visible = !scoped;
-    this.poseBody(dt, scoped);
+    if (USE_FP_ARMS) { this.arms.setLeftOffset(this.leftOffset); this.arms.update(!scoped && this.holder.visible); }
+    else this.poseBody(dt, scoped);
     this.flashT -= dt;
     this.flash.visible = this.flashT > 0;
     this.flashLight.intensity = this.flashT > 0 ? 2.5 : 0;
