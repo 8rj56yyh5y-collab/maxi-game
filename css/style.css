@@ -605,3 +605,15 @@ body:not(.is-touch) .touch-only { display: none; }
 .tbtn.down { transform: translate(-50%,-50%) scale(.92); }
 .tbtn[data-btn=fire], .tbtn[data-btn=fireL] { background: radial-gradient(circle at 50% 35%, rgba(255,120,100,.35), rgba(150,20,10,.42) 70%); border-color: rgba(255,170,160,.6); }
 .tbtn[data-btn=crouch].on { background: radial-gradient(circle, rgba(41,182,246,.55), rgba(10,40,70,.5)); }
+/* Превью карты: пока нет рендера — атмосферный градиент со «скайлайном» */
+.map-card .thumb.ph { background:
+  linear-gradient(180deg, transparent 55%, rgba(0,0,0,.55) 55% 100%),
+  repeating-linear-gradient(90deg, rgba(0,0,0,.45) 0 9%, transparent 9% 13%, rgba(0,0,0,.35) 13% 20%, transparent 20% 26%),
+  linear-gradient(160deg, hsl(var(--mg) 55% 45%), hsl(calc(var(--mg) + 40) 45% 16%)); }
+.map-card:hover .thumb { filter: brightness(1.15); }
+.map-card .thumb { transition: filter .15s; }
+@media (max-height: 560px) {
+  .pw small, .pw .hint { font-size: 10px; } .pw b { font-size: 15px; line-height: 1.15; }
+  .play-widgets .pw { padding: 6px 10px; }
+  .maps { gap: 6px !important; } .map-card .thumb { aspect-ratio: 16/6; }
+}

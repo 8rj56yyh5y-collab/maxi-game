@@ -328,7 +328,7 @@ function renderPlay() {
   $('modes').querySelectorAll('.mode-card').forEach(b => b.onclick = () => { m.mode = b.dataset.mode; saveSettings(); sound.uiClick(); renderPlay(); });
   const seg = (key, opts) => `<div class="seg" data-opt="${key}">${opts.map(([v, l]) => `<button data-v="${v}" class="${m[key] == v ? 'on' : ''}">${l}</button>`).join('')}</div>`;
   const rows = [];
-  rows.push(`<div class="row"><label>Карта</label><div class="maps">${Object.values(MAPS).filter(mp => !mp.hidden).map(mp => `<button class="map-card ${m.map === mp.id ? 'on' : ''}" data-map="${mp.id}">${mapThumbs[mp.id] ? `<img class="thumb" src="${mapThumbs[mp.id]}">` : '<div class="thumb"></div>'}<div class="info"><b>${mp.name}</b></div></button>`).join('')}</div></div>`);
+  rows.push(`<div class="row"><label>Карта</label><div class="maps">${Object.values(MAPS).filter(mp => !mp.hidden).map(mp => `<button class="map-card ${m.map === mp.id ? 'on' : ''}" data-map="${mp.id}">${mapThumbs[mp.id] ? `<img class="thumb" src="${mapThumbs[mp.id]}">` : `<div class="thumb ph" style="--mg:${mapHue(mp.id)}"></div>`}<div class="info"><b>${mp.name}</b></div></button>`).join('')}</div></div>`);
   if (m.mode === 'ranked') {
     const rk = rankOf(profile.rating || 0);
     const prev = rk.next ? (rk.next - 100) : rk.rating;
@@ -582,6 +582,8 @@ function renderStore() {
 
 // ---------- Профиль ----------
 // ---------- Клан ----------
+// Заглушка превью карты, пока рендерится настоящее: свой цвет у каждой карты
+function mapHue(id) { let h = 0; for (const c of id) h = (h * 31 + c.charCodeAt(0)) % 360; return h; }
 let clanForm = { icon: 'shield', color: 0 };
 function renderClan() {
   setLobbyMode('char');

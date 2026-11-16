@@ -6,7 +6,7 @@ import { CharacterModel, solveIK, aimBone } from './character.js';
 import { surface } from './textures.js';
 
 // Положение точки хвата относительно глаза
-const HIP = { pistol: [0.11, -0.125, -0.4], smg: [0.125, -0.15, -0.3], rifle: [0.125, -0.155, -0.29], sniper: [0.125, -0.15, -0.26], shotgun: [0.125, -0.15, -0.29], knife: [0.13, -0.13, -0.34], grenade: [0.12, -0.12, -0.3] };
+const HIP = { pistol: [0.11, -0.125, -0.4], smg: [0.125, -0.15, -0.3], rifle: [0.125, -0.155, -0.29], sniper: [0.125, -0.15, -0.26], shotgun: [0.125, -0.15, -0.29], knife: [0.15, -0.145, -0.41], grenade: [0.13, -0.13, -0.33] };
 const sm01 = (x) => { const t = Math.min(1, Math.max(0, x)); return t * t * (3 - 2 * t); };
 const ADS_Z = { pistol: -0.38, smg: -0.15, rifle: -0.14, sniper: -0.1, shotgun: -0.16 };
 
@@ -253,6 +253,9 @@ export class ViewModel {
     if (!ch.root.visible) return;
     ch.mixer.update(dt * 0.6);
     for (const [a, h] of [[B.lArm, B.lHand], [B.rArm, B.rHand]]) { a.scale.setScalar(this.armK); h.scale.setScalar(1 / this.armK); }
+    // нож и граната — одной рукой: левая убрана, чтобы не перекрывать обзор
+    const oneHand = !this.ud.gripL;
+    if (oneHand) B.lArm.scale.setScalar(0.0001);
     ch.root.position.set(0.02, -this.eyeY - 0.1, 0.32);
     ch.root.rotation.set(0, 0, 0);
     ch.root.updateMatrixWorld(true);
