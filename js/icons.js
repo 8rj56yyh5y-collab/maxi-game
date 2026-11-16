@@ -53,6 +53,7 @@ export function iconImg(id, cls = '') {
 
 // ---------- Картинки предметов (3D-рендер оружия в скине), как в инвентаре CS ----------
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
+import { CharacterModel } from './character.js';
 const ITEM_IMG = new Map();
 const itemQueue = [];
 let itemCtx = null;
@@ -85,17 +86,35 @@ export function pumpItemImages(budget = 2) {
 }
 function renderItem(skin) {
   const { renderer, scene, W, H, rt, buf } = itemCtx;
-  const m = buildWeaponModel(skin.weapon, skin);
+  let m, box, size, c;
+  if (skin.agent) {
+    // портрет агента: фигура в стойке, кадр от колен до головы
+    const ch = new CharacterModel(skin.agent.team, -1, skin);
+    const act = { pos: new THREE.Vector3(), vel: new THREE.Vector3(), yaw: Math.PI - 0.45, pitch: -0.05, alive: true, crouchT: 0 };
+    for (let k = 0; k < 4; k++) ch.update(1 / 30, act);
+    m = ch.root; scene.add(m); m.updateMatrixWorld(true);
+    box = new THREE.Box3(new THREE.Vector3(-0.5, 0.55, -0.5), new THREE.Vector3(0.5, 1.9, 0.5));
+    size = box.getSize(new THREE.Vector3()); c = box.getCenter(new THREE.Vector3());
+    const aspect = W / H, hh = size.y / 2 * 0.62, hw = hh * aspect;
+    const cam = new THREE.OrthographicCamera(-hw, hw, hh, -hh, 0.01, 20);
+    cam.position.set(c.x, c.y + 0.25, c.z + 3); cam.lookAt(c.x, c.y + 0.25, c.z);
+    return finishItem(m, cam);
+  }
+  m = buildWeaponModel(skin.weapon, skin);
   scene.add(m);
   const knife = !!KNIVES[skin.weapon];
   m.rotation.set(0, Math.PI / 2, knife ? 0.35 : 0.12);
   m.updateMatrixWorld(true);
-  const box = new THREE.Box3().setFromObject(m), size = box.getSize(new THREE.Vector3()), c = box.getCenter(new THREE.Vector3());
+  box = new THREE.Box3().setFromObject(m); size = box.getSize(new THREE.Vector3()); c = box.getCenter(new THREE.Vector3());
   const aspect = W / H;
   let hw = size.x / 2 * 1.12, hh = size.y / 2 * 1.12;
   if (hw / hh < aspect) hw = hh * aspect; else hh = hw / aspect;
   const cam = new THREE.OrthographicCamera(-hw, hw, hh, -hh, 0.01, 20);
   cam.position.set(c.x, c.y, c.z + 3); cam.lookAt(c);
+  return finishItem(m, cam);
+}
+function finishItem(m, cam) {
+  const { renderer, scene, W, H, rt, buf } = itemCtx;
   const prevTM = renderer.toneMapping, prevExp = renderer.toneMappingExposure;
   renderer.toneMapping = THREE.ACESFilmicToneMapping; renderer.toneMappingExposure = 1.1;
   renderer.setRenderTarget(rt); renderer.setClearColor(0x000000, 0); renderer.clear();

@@ -96,7 +96,7 @@ function setLobbyTeam(team) {
   if (lobby.team === team && lobby.char) return;
   lobby.team = team;
   if (lobby.char) lobby.scene.remove(lobby.char.root);
-  lobby.char = new CharacterModel(team);
+  lobby.char = new CharacterModel(team, -1, equippedSkin('agent' + team));
   lobby.scene.add(lobby.char.root);
   lobby.actor = { pos: new THREE.Vector3(0, 0, 0), vel: new THREE.Vector3(), yaw: Math.PI - 0.5, pitch: -0.08, alive: true, crouchT: 0 };
   lobby.charWeapon = null;
@@ -169,7 +169,8 @@ function updateSquad(dt, cx, cz) {
     if (lobby.squad) for (const m of lobby.squad) m.ch.root.parent && m.ch.root.parent.remove(m.ch.root);
     lobby.squadTeam = lobby.team;
     lobby.squad = SQUAD_POS.map((p, i) => {
-      const ch = new CharacterModel(lobby.team);
+      const agents = Object.values(ALL_SKINS).filter(x => x.weapon === 'agent' + lobby.team);
+      const ch = new CharacterModel(lobby.team, -1, Math.random() < 0.75 && agents.length ? agents[(i * 3 + 1) % agents.length] : null);
       const gun = SQUAD_GUNS[lobby.team][i];
       try { ch.setWeapon(WEAPONS[gun] ? gun : (lobby.team === 'A' ? 'ar4' : 'ak'), null); } catch (e) { /* ignore */ }
       ch.mixer.update(i * 1.7);
@@ -183,6 +184,18 @@ function updateSquad(dt, cx, cz) {
     m.actor.yaw = Math.atan2(-(cam.position.x - m.actor.pos.x), -(cam.position.z - m.actor.pos.z)) + m.p[2];
     m.ch.update(dt, m.actor);
   }
+}
+
+// Вращение предмета в витрине (осмотр)
+{
+  let drag = null, pinch = 0;
+  const bgTarget = (t) => t === canvas || t.id === 'menu' || (t.classList && (t.classList.contains('screen') || t.classList.contains('lo-info')));
+  document.addEventListener('pointerdown', (e) => { if (game || lobby.mode !== 'weapon' || !bgTarget(e.target)) return; drag = { x: e.clientX, y: e.clientY }; });
+  window.addEventListener('pointermove', (e) => { if (!drag) return; lobby.rotY = (lobby.rotY || 0) + (e.clientX - drag.x) * 0.012; lobby.rotX = Math.max(-1.2, Math.min(1.2, (lobby.rotX || 0) + (e.clientY - drag.y) * 0.008)); drag = { x: e.clientX, y: e.clientY }; lobby.dragAt = performance.now(); });
+  window.addEventListener('pointerup', () => { drag = null; });
+  document.addEventListener('wheel', (e) => { if (game || lobby.mode !== 'weapon' || !bgTarget(e.target)) return; lobby.zoom = Math.max(0.45, Math.min(1.3, (lobby.zoom || 1) * (e.deltaY > 0 ? 1.08 : 0.92))); lobby.dragAt = performance.now(); }, { passive: true });
+  document.addEventListener('touchmove', (e) => { if (game || lobby.mode !== 'weapon' || e.touches.length !== 2 || !bgTarget(e.target)) return; const d = Math.hypot(e.touches[0].clientX - e.touches[1].clientX, e.touches[0].clientY - e.touches[1].clientY); if (pinch) lobby.zoom = Math.max(0.45, Math.min(1.3, (lobby.zoom || 1) * pinch / d)); pinch = d; }, { passive: true });
+  document.addEventListener('touchend', () => { pinch = 0; });
 }
 
 function renderLobby(dt) {
@@ -215,9 +228,15 @@ function renderLobby(dt) {
     lobby.camera.position.set(0.1 + Math.sin(lobby.t * 0.15) * 0.08, 1.45, 5.6);
     lobby.camera.lookAt(0, 1.0, 0);
   } else {
-    if (lobby.weapon) { lobby.weapon.rotation.y = Math.sin(lobby.t * 0.45) * 0.6 - Math.PI / 2 + 0.25; lobby.weapon.position.y = Math.sin(lobby.t * 1.2) * 0.02; }
+    if (lobby.weapon) {
+      // осмотр: тянуть пальцем/мышью — вращать, колесо/щипок — приблизить; без касаний — плавное покачивание
+      const idle = performance.now() - (lobby.dragAt || 0) > 2500;
+      if (idle) lobby.rotY = (lobby.rotY ?? 0) * 0.97 + (Math.sin(lobby.t * 0.45) * 0.6) * 0.03, lobby.rotX = (lobby.rotX ?? 0) * 0.95;
+      lobby.weapon.rotation.set(lobby.rotX || 0, (lobby.rotY || 0) - Math.PI / 2 + 0.25, 0);
+      lobby.weapon.position.y = Math.sin(lobby.t * 1.2) * 0.02;
+    }
     const off = aspect > 1.3 ? -0.42 : 0;
-    lobby.camera.position.set(off, 1.25, 3.4);
+    lobby.camera.position.set(off, 1.25, 3.4 * (lobby.zoom || 1));
     lobby.camera.lookAt(off, 1.1, 0);
   }
   lobby.dust.rotation.y += dt * 0.02;
@@ -388,13 +407,13 @@ function loInfo(id) {
 // ---------- Инвентарь ----------
 let invFilter = 'all', invRarity = 'all', invSel = null;
 function renderInventory() {
-  const cats = [['all', 'Все'], ...CAT_ORDER.map(c => [c, CATS[c]]), ['knife', 'Ножи']];
+  const cats = [['all', 'Все'], ...CAT_ORDER.map(c => [c, CATS[c]]), ['knife', 'Ножи'], ['agent', 'Агенты']];
   $('inv-filter').innerHTML = cats.map(([k, n]) => `<button data-k="${k}" class="${invFilter === k ? 'on' : ''}">${n}</button>`).join('');
   $('inv-filter').querySelectorAll('button').forEach(b => b.onclick = () => { invFilter = b.dataset.k; renderInventory(); });
   $('inv-rarity').innerHTML = [['all', 'Любая'], ...RARITY_ORDER.map(r => [r, RARITY[r].name])].map(([k, n]) => `<button data-k="${k}" class="${invRarity === k ? 'on' : ''}" ${k !== 'all' ? `style="color:${RARITY[k].color}"` : ''}>${n}</button>`).join('');
   $('inv-rarity').querySelectorAll('button').forEach(b => b.onclick = () => { invRarity = b.dataset.k; renderInventory(); });
   const items = profile.owned.map(id => SKINS[id]).filter(Boolean)
-    .filter(s => invFilter === 'all' || (invFilter === 'knife' ? KNIVES[s.weapon] : WEAPONS[s.weapon] && WEAPONS[s.weapon].cat === invFilter))
+    .filter(s => invFilter === 'all' || (invFilter === 'knife' ? KNIVES[s.weapon] : invFilter === 'agent' ? s.agent : WEAPONS[s.weapon] && WEAPONS[s.weapon].cat === invFilter))
     .filter(s => invRarity === 'all' || s.rarity === invRarity)
     .sort((a, b) => RARITY_ORDER.indexOf(b.rarity) - RARITY_ORDER.indexOf(a.rarity));
   $('inv-count').textContent = `${profile.owned.length} предметов`;
@@ -403,17 +422,24 @@ function renderInventory() {
   $('inv-grid').querySelectorAll('.skin').forEach(b => b.onclick = () => { invSel = b.dataset.id; sound.uiClick(); renderInventory(); });
   invInfo();
 }
+function previewAgent(s) {
+  const team = s.agent.team;
+  if (lobby.char) { lobby.char.root.parent && lobby.char.root.parent.remove(lobby.char.root); }
+  lobby.team = team; lobby.char = new CharacterModel(team, -1, s); lobby.scene.add(lobby.char.root);
+  lobby.charWeapon = null; setLobbyCharacter(); setLobbyMode('char');
+}
+
 function invInfo() {
   const s = SKINS[invSel];
   if (!s || !profile.owned.includes(s.id)) { $('inv-info').innerHTML = ''; return; }
-  setShowcase(s.weapon, s);
+  if (s.agent) previewAgent(s); else setShowcase(s.weapon, s);
   const eq = profile.equipped[s.weapon] === s.id;
   const col = s.collection === 'blades' ? { name: 'Клинки', lore: 'Ножи выпадают редко: из кейсов с особым шансом и из кейса «Самоцветы».' } : COLLECTIONS[s.collection] || COLLECTIONS.base;
   $('inv-info').innerHTML = `<div class="card inv-card" style="--rc:${RARITY[s.rarity].color}"><div class="wsub" style="color:${RARITY[s.rarity].color}">${RARITY[s.rarity].name}${s.fx ? ' · <span class="live">ЖИВОЙ СКИН</span>' : ''}${s.signature ? ' · ИМЕННОЙ' : ''}</div><div class="wname">${itemName(s.weapon).split(' «')[0]} | ${s.name}</div>
     <div class="coll"><small>Коллекция</small><b>${col.name}</b></div>
     ${s.story ? `<p class="story">«${s.story}»</p>` : `<p class="story dim">${col.lore}</p>`}
     <div class="btn-row" style="margin-top:12px"><button class="btn" id="inv-eq">${eq ? 'Снять' : 'Экипировать'}</button><button class="btn danger" id="inv-sell">Продать · ◈ ${RARITY[s.rarity].sell * 10}</button></div></div>`;
-  $('inv-eq').onclick = () => { equip(s.weapon, eq ? null : s.id); if (!eq && KNIVES[s.weapon]) profile.knife = s.weapon; saveProfile(); sound.uiClick(); renderInventory(); };
+  $('inv-eq').onclick = () => { equip(s.weapon, eq ? null : s.id); if (s.agent) { lobby.team = null; setLobbyTeam(s.agent.team); } if (!eq && KNIVES[s.weapon]) profile.knife = s.weapon; saveProfile(); sound.uiClick(); renderInventory(); };
   $('inv-sell').onclick = () => { const v = sellSkin(s.id); toast(`Продано за ◈ ${v}`); invSel = null; renderTopbar(); renderInventory(); };
 }
 

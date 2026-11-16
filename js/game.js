@@ -13,6 +13,13 @@ import { settings } from './settings.js';
 import { sound } from './audio.js';
 import { setupAtmosphere, followShadow, Pipeline } from './render.js';
 
+// Агент (скин персонажа): игрок — экипированный, боты — случайный своей стороны
+function pickAgent(a, team) {
+  if (a.isPlayer) return equippedSkin('agent' + team);
+  if (Math.random() < 0.35) return null;
+  const list = Object.values(SKINS).filter(s => s.weapon === 'agent' + team);
+  return list.length ? list[Math.floor(Math.random() * list.length)] : null;
+}
 const BOT_NAMES = ['Hawk', 'Thunder', 'Shadow', 'Cobra', 'NorthStar', 'Shaman', 'Bison', 'Phantom', 'Lynx', 'Diesel', 'Vector', 'Ghost', 'Grizzly', 'Falcon', 'Tanker', 'Blizzard', 'Beetle', 'Cap', 'Wolf', 'Sapper', 'Raven', 'Viper', 'Titan', 'Kestrel', 'Reaper', 'Nova', 'Spectre', 'Rogue', 'Blaze', 'Frost'];
 const RUN_SPEED = 5.6;
 const EYE = 1.62;
@@ -126,7 +133,7 @@ export class Game {
       else a.inv.knife = Math.random() < 0.15 ? ['bayonet', 'karambit', 'butterfly', 'kukri', 'dagger'][Math.floor(Math.random() * 5)] : 'knife';
       if (!isPlayer) {
         a.brain = makeBrain(difficulty);
-        a.model = new CharacterModel(team === 'F' ? (a.ffaIndex % 2 ? 'B' : 'A') : team, a.ffaIndex);
+        a.model = new CharacterModel(team === 'F' ? (a.ffaIndex % 2 ? 'B' : 'A') : team, a.ffaIndex, pickAgent(a, team === 'F' ? (a.ffaIndex % 2 ? 'B' : 'A') : team));
         this.scene.add(a.model.root);
       }
       this.actors.push(a);
@@ -391,7 +398,7 @@ export class Game {
       a.money = ECON.start;
       a.inv.primary = null; a.inv.secondary = null; a.inv.grenades = { he: 0, flash: 0, smoke: 0 };
       a.armor = 0; a.helmet = false; a.defuseKit = false; a.alive = false;
-      if (a.model) { this.scene.remove(a.model.root); a.model = new CharacterModel(a.team); this.scene.add(a.model.root); }
+      if (a.model) { this.scene.remove(a.model.root); a.model = new CharacterModel(a.team, -1, pickAgent(a, a.team)); this.scene.add(a.model.root); }
     }
     const s = this.score.A; this.score.A = this.score.B; this.score.B = s;
     const l = this.lossStreak.A; this.lossStreak.A = this.lossStreak.B; this.lossStreak.B = l;

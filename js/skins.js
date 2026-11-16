@@ -39,6 +39,14 @@ if (!profile.starterV3) {
   profile.starterV3 = true;
   try { localStorage.setItem(KEY, JSON.stringify(profile)); } catch (e) { /* ignore */ }
 }
+if (!profile.starterV5) {
+  for (const id of ['agent_nightops', 'agent_neonronin']) if (SKINS[id] && !profile.owned.includes(id)) profile.owned.push(id);
+  if (SKINS.agent_nightops) profile.equipped.agentA = 'agent_nightops';
+  if (SKINS.agent_neonronin) profile.equipped.agentB = 'agent_neonronin';
+  profile.cases = { ...profile.cases, agents: (profile.cases.agents || 0) + 2 };
+  profile.starterV5 = true;
+  try { localStorage.setItem(KEY, JSON.stringify(profile)); } catch (e) { /* ignore */ }
+}
 if (!profile.starterV4) {
   for (const id of ['ak_phoenix', 'br17_chameleon', 'p9_hologram']) if (SKINS[id] && !profile.owned.includes(id)) profile.owned.push(id);
   if (SKINS.ak_phoenix) profile.equipped.ak = 'ak_phoenix';

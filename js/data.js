@@ -184,7 +184,25 @@ for (const sg of SIGNATURES) {
 }
 for (const sk of Object.values(SKINS)) sk.collection = KNIVES[sk.weapon] ? 'blades' : (COLLECTIONS[sk.theme] ? sk.theme : 'base');
 
-export function itemName(w) { return WEAPONS[w] ? WEAPONS[w].name : KNIVES[w] ? KNIVES[w].name : w; }
+// ---------- Агенты (скины персонажей) ----------
+export const AGENTS = [
+  { key: 'urbanops',  team: 'A', name: 'Городской рейнджер',  rarity: 'common',    pattern: 'pixel',    colors: ['#6a7480', '#4a525c', '#9aa2ac'], visor: '#49a8ff', story: 'Стандартная форма городского спецназа: цифровой камуфляж под бетон и асфальт.' },
+  { key: 'arctic',    team: 'A', name: 'Арктический штурмовик', rarity: 'rare',    pattern: 'camo',     colors: ['#e8eef4', '#9fb6c6', '#5f7a8c'], visor: '#7ae6ff', story: 'Отряд станции «Кольцо». Белый камуфляж, в котором его не видно на снегу.' },
+  { key: 'nightops',  team: 'A', name: 'Ночной оперативник',  rarity: 'epic',      pattern: 'solid',    colors: ['#1a1d22'], visor: '#00e5ff', story: 'Работает только после заката. Чёрная форма поглощает свет фонарей.' },
+  { key: 'cyberguard', team: 'A', name: 'Кибер-гвардия',      rarity: 'legendary', pattern: 'circuit',  colors: ['#0b1424', '#2ec4ff', '#ffffff'], visor: '#2ec4ff', glow: '#2ec4ff', story: 'Экзоброня лаборатории «Призрак». По швам бегут светящиеся схемы.' },
+  { key: 'goldlegion', team: 'A', name: 'Золотой легион',     rarity: 'mythic',    pattern: 'chrome',   colors: ['#ffd76a', '#8a5a00', '#fff2c0'], visor: '#ffb000', story: 'Парадная броня чемпионов сезона. Выдаётся только лучшим из лучших.' },
+  { key: 'desertfox', team: 'B', name: 'Пустынный лис',       rarity: 'common',    pattern: 'camo',     colors: ['#c9a66b', '#9c7a45', '#e0c999'], visor: '#ff7a3c', story: 'Наёмник из песков Оазиса. Камуфляж под цвет барханов.' },
+  { key: 'forestghost', team: 'B', name: 'Лесной призрак',    rarity: 'rare',      pattern: 'camo',     colors: ['#4b5a32', '#2e3a1f', '#7a8450'], visor: '#9cff4a', story: 'Охотник за головами. Выходит из чащи без единого звука.' },
+  { key: 'tigerjungle', team: 'B', name: 'Тигр джунглей',     rarity: 'epic',      pattern: 'tiger',    colors: ['#e08a1e', '#1a1208'], visor: '#ffb000', story: 'Командир наёмников с юга. Полосы на броне — его личная подпись.' },
+  { key: 'neonronin', team: 'B', name: 'Неоновый ронин',      rarity: 'legendary', pattern: 'neon',     colors: ['#120a1f', '#ff3ea5', '#3ef0ff'], visor: '#ff3ea5', glow: '#ff3ea5', story: 'Наёмник из Сибуи. Броня подсвечена так же, как вывески его квартала.' },
+  { key: 'inferno',   team: 'B', name: 'Огненный демон',      rarity: 'mythic',    pattern: 'flames',   colors: ['#3a0800', '#ff4a00', '#ffd400'], visor: '#ff2a00', glow: '#ff6a00', story: 'Выжил в пожаре операции «Пепел». С тех пор его броня словно горит.' },
+];
+for (const ag of AGENTS) {
+  const id = 'agent_' + ag.key;
+  SKINS[id] = { id, weapon: 'agent' + ag.team, name: ag.name, rarity: ag.rarity, pattern: ag.pattern, colors: ag.colors, glow: ag.glow, agent: ag, story: ag.story, theme: 'agents', style: ag.key, collection: 'agents' };
+}
+
+export function itemName(w) { return WEAPONS[w] ? WEAPONS[w].name : KNIVES[w] ? KNIVES[w].name : w === 'agentA' ? 'Агент спецназа' : w === 'agentB' ? 'Агент наёмников' : w; }
 export function itemShort(w) { const n = itemName(w); return n.split(' «')[0]; }
 
 // ---------- Кейсы ----------
@@ -217,6 +235,8 @@ export const CASES = [
     weights: { rare: 30, epic: 36, legendary: 24, mythic: 10 }, knifeChance: 0.025, lore: 'deep' },
   { id: 'north',  name: 'Кейс «Северный фронт»', price: 240, currency: 'gold', color: '#7ae6ff', filter: (s) => !KNIVES[s.weapon] && (s.theme === 'north' || ['arctic', 'ice', 'digiblue', 'urban'].includes(s.style)),
     weights: { common: 10, rare: 30, epic: 32, legendary: 20, mythic: 8 }, knifeChance: 0.025, lore: 'north' },
+  { id: 'agents', name: 'Кейс «Оперативники»', price: 300, currency: 'gold', color: '#4ee08a', filter: (s) => s.weapon === 'agentA' || s.weapon === 'agentB',
+    weights: { common: 40, rare: 30, epic: 18, legendary: 9, mythic: 3 }, lore: 'agents' },
   { id: 'blade',  name: 'Кейс «Клинок»',  price: 500, currency: 'gold', color: '#ffb400', filter: (s) => !!KNIVES[s.weapon] && s.weapon !== 'knife',
     weights: { epic: 40, legendary: 42, mythic: 18 } },
 ];

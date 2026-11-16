@@ -2,6 +2,7 @@
 import * as THREE from 'three';
 import { clone as cloneSkinned } from 'three/addons/utils/SkeletonUtils.js';
 import { A, texSet } from './assets.js';
+import { skinCanvas } from './textures.js';
 import { buildWeaponModel } from './weapons.js';
 
 export const TEAM_STYLE = {
@@ -155,8 +156,27 @@ function clothNormal() {
   return _clothN;
 }
 
+// Текстура агента: родной атлас брони × камуфляж/рисунок (кэш по агенту)
+const AGENT_TEX = new Map();
+function agentTexture(srcMap, agent) {
+  const key = agent.key;
+  if (AGENT_TEX.has(key)) return AGENT_TEX.get(key);
+  const img = srcMap && srcMap.image;
+  const W = 1024, c = document.createElement('canvas'); c.width = c.height = W;
+  const ctx = c.getContext('2d');
+  // светлая база: исходная текстура даёт швы и детали брони
+  if (img) { ctx.drawImage(img, 0, 0, W, W); ctx.globalCompositeOperation = 'luminosity'; ctx.fillStyle = '#c8c8c8'; ctx.globalAlpha = 0.55; ctx.fillRect(0, 0, W, W); ctx.globalAlpha = 1; }
+  ctx.globalCompositeOperation = 'multiply';
+  const pat = skinCanvas({ id: 'agent_' + key, pattern: agent.pattern, colors: agent.colors }, 256);
+  for (let y = 0; y < W; y += 256) for (let x = 0; x < W; x += 256) ctx.drawImage(pat, x, y);
+  ctx.globalCompositeOperation = 'source-over';
+  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.flipY = srcMap ? srcMap.flipY : false; t.anisotropy = 4;
+  AGENT_TEX.set(key, t);
+  return t;
+}
+
 export class CharacterModel {
-  constructor(team, ffaIndex = -1) {
+  constructor(team, ffaIndex = -1, agentSkin = null) {
     const st = TEAM_STYLE[team] || TEAM_STYLE.A;
     this.root = new THREE.Group();
     this.body = new THREE.Group();
@@ -171,7 +191,14 @@ export class CharacterModel {
       if (o.isMesh) {
         o.castShadow = true; o.receiveShadow = true; o.frustumCulled = false;
         const m = o.material.clone();
-        if (/Visor/.test(m.name)) { m.color.set(st.visor); m.emissive = new THREE.Color(st.visor); m.emissiveIntensity = 0.35; m.metalness = 0.6; m.roughness = 0.2; }
+        if (/Visor/.test(m.name)) { const vc = agentSkin && agentSkin.agent ? agentSkin.agent.visor : st.visor; m.color.set(vc); m.emissive = new THREE.Color(vc); m.emissiveIntensity = 0.45; m.metalness = 0.6; m.roughness = 0.2; } else if (false) { m.color.set(st.visor); m.emissive = new THREE.Color(st.visor); m.emissiveIntensity = 0.35; m.metalness = 0.6; m.roughness = 0.2; }
+        else if (agentSkin && agentSkin.agent) {
+          const ag = agentSkin.agent;
+          m.map = agentTexture(m.map, ag); m.color.set(0xffffff).multiplyScalar(0.92 + Math.random() * 0.1);
+          m.roughness = ag.pattern === 'chrome' ? 0.25 : 0.62; m.metalness = ag.pattern === 'chrome' ? 0.85 : 0.15;
+          if (ag.glow) { m.emissive = new THREE.Color(ag.glow); m.emissiveMap = m.map; m.emissiveIntensity = 0.35; }
+          m.normalMap = clothNormal(); m.normalScale = new THREE.Vector2(0.5, 0.5);
+        }
         else {
           m.color.set(tint).multiplyScalar(this.shade); m.roughness = Math.max(0.6, m.roughness || 0.7);
           // микрорельеф ткани поверх исходной текстуры
