@@ -451,13 +451,91 @@ function buildM4(G) {
   return { trigger: [0.0, y - 0.034], gripL: [hf + hl * 0.5, hy - 0.03], muzzle: [mz + 0.05, hy], sight: y + 0.068, magTop: [0.072, y - 0.056], bolt: [-0.1, y + 0.028], scopeAt: [0.0, y + 0.04] };
 }
 
+
+// ---------- AWP (AWR): детальная модель ----------
+function buildAWP(G) {
+  const y = 0;
+  // ложа-шасси: широкая, с вырезом под палец, регулируемой щекой и затыльником
+  G.prof('body', [[0.34, y + 0.014], [0.34, y - 0.028], [0.1, y - 0.034], [0.07, y - 0.05], ['q', 0.04, y - 0.06, 0.03, y - 0.075], [0.01, y - 0.13], ['q', -0.01, y - 0.14, -0.04, y - 0.132], [-0.052, y - 0.075], ['q', -0.07, y - 0.06, -0.09, y - 0.058], [-0.28, y - 0.098], [-0.31, y - 0.11], [-0.33, y - 0.11], [-0.335, y + 0.016], [-0.24, y + 0.022], [-0.1, y + 0.014]], 0.044, { bevel: 0.009, seg: 14 });
+  G.prof('rubber', [[-0.02, y - 0.07], ['q', -0.035, y - 0.11, -0.03, y - 0.12], [0.0, y - 0.12], ['q', 0.012, y - 0.085, 0.01, y - 0.062]], 0.046, { bevel: 0.004 });   // вырез «дыра под палец»
+  G.box('body', 0.03, 0.022, 0.13, -0.24, y + 0.034, { r: 0.006 });                                  // щека
+  G.cyl('steel', 0.003, 0.003, 0.03, -0.215, y + 0.012, { seg: 10 }); G.cyl('steel', 0.003, 0.003, 0.03, -0.265, y + 0.012, { seg: 10 });
+  G.box('rubber', 0.047, 0.15, 0.016, -0.34, y - 0.045, { r: 0.006 });                               // затыльник
+  G.box('metal', 0.012, 0.02, 0.04, -0.3, y - 0.11, { r: 0.004 });                                    // моноопора
+  for (const ff of [0.14, 0.2, 0.26]) G.box('rubber', 0.045, 0.008, 0.03, ff, y - 0.012, { r: 0.002 }); // вентиляция цевья
+  // ствольная коробка, затвор с рукоятью-шаром, спуск
+  G.cyl('metal', 0.016, 0.016, 0.24, -0.09, y + 0.026, { seg: 24 });
+  G.rail(-0.08, 0.22, y + 0.042, 0.022);
+  G.cyl('steel', 0.0105, 0.0105, 0.1, -0.13, y + 0.026, { seg: 18, target: 'bolt' });
+  G.box('steel', 0.045, 0.007, 0.007, -0.06, y + 0.024, { x: 0.024, target: 'bolt' });
+  { const kb = new THREE.SphereGeometry(0.011, 16, 12); kb.translate(0.05, y + 0.02, 0.06); G.push('rubber', kb, 'bolt'); }
+  G.prof('metal', [[0.06, y - 0.034], [0.06, y - 0.046], ['q', 0.05, y - 0.06, 0.03, y - 0.06], [-0.02, y - 0.06], [-0.02, y - 0.034], [-0.012, y - 0.034], [-0.012, y - 0.052], [0.035, y - 0.052], ['q', 0.05, y - 0.052, 0.052, y - 0.034]], 0.01, { bevel: 0.0012 });
+  G.prof('steel', [[0.02, y - 0.034], ['q', 0.026, y - 0.044, 0.014, y - 0.052], [0.009, y - 0.051], ['q', 0.018, y - 0.043, 0.013, y - 0.034]], 0.006, { bevel: 0.0008 });
+  G.box('metal', 0.03, 0.05, 0.075, 0.1, y - 0.06, { target: 'mag', r: 0.004 });                      // магазин
+  // ствол с проточками, дульный тормоз
+  G.cyl('metal', 0.0135, 0.0105, 0.44, 0.15, y + 0.026, { seg: 24 });
+  for (let k = 0; k < 6; k++) { const a = k / 6 * Math.PI * 2; G.box('rubber', 0.0025, 0.0025, 0.2, 0.3, y + 0.026 + Math.sin(a) * 0.0118, { x: Math.cos(a) * 0.0118, r: 0.0006 }); }
+  const mz = 0.59;
+  G.lathe('metal', [[0, mz], [0.017, mz], [0.019, mz + 0.012], [0.019, mz + 0.072], [0.016, mz + 0.08], [0, mz + 0.08]], y + 0.026, { seg: 24 });
+  for (let k = 0; k < 4; k++) G.box('rubber', 0.039, 0.016, 0.009, mz + 0.016 + k * 0.016, y + 0.026, { r: 0.001 });
+  // сошки (сложены)
+  G.box('metal', 0.03, 0.014, 0.02, 0.31, y - 0.034, { r: 0.004 });
+  for (const sx of [-1, 1]) G.cyl('metal', 0.004, 0.004, 0.17, 0.32, y - 0.042, { x: sx * 0.011, seg: 10 });
+  const sy = buildScopeParts(G, 0.03, y + 0.044, true);
+  return { trigger: [0.02, y - 0.044], gripL: [0.24, y - 0.04], muzzle: [mz + 0.08, y + 0.026], sight: sy, magTop: [0.1, y - 0.04], bolt: [-0.08, y + 0.026] };
+}
+
+// ---------- Desert Eagle (P50): детальная модель ----------
+function buildDeagle(G) {
+  const y = 0;
+  // массивный затвор с треугольным стволом и насечками
+  G.prof('metal', [[-0.04, y], [0.215, y], [0.215, y + 0.028], [0.07, y + 0.03], [-0.04, y + 0.03]], 0.032, { bevel: 0.0025, target: 'bolt' });
+  G.prof('metal', [[0.03, y + 0.03], [0.215, y + 0.03], [0.215, y + 0.042], [0.04, y + 0.042]], 0.018, { bevel: 0.0018, target: 'bolt' });
+  G.box('metal', 0.012, 0.006, 0.16, 0.13, y + 0.045, { r: 0.0012, target: 'bolt' });
+  for (let k = 0; k < 9; k++) G.box('rubber', 0.0335, 0.022, 0.0028, -0.03 + k * 0.0055, y + 0.016, { r: 0.0005, target: 'bolt' });
+  G.box('steel', 0.016, 0.009, 0.008, -0.034, y + 0.034, { r: 0.002, target: 'bolt' });             // целик
+  G.box('steel', 0.004, 0.009, 0.008, 0.2, y + 0.05, { target: 'bolt' });                              // мушка
+  G.cyl('metal', 0.0085, 0.0085, 0.006, 0.212, y + 0.02, { seg: 18 });
+  G.box('steel', 0.01, 0.008, 0.016, -0.02, y + 0.026, { x: 0.018, r: 0.002, target: 'bolt' });     // предохранитель
+  // рамка, спусковая скоба, курок
+  G.prof('body', [[-0.045, y], [0.15, y], [0.15, y - 0.016], [0.06, y - 0.018], [0.05, y - 0.022], [-0.01, y - 0.022]], 0.03, { bevel: 0.0025 });
+  G.prof('body', [[0.05, y - 0.018], [0.055, y - 0.05], [0.04, y - 0.058], [-0.004, y - 0.058], [-0.004, y - 0.05], [0.036, y - 0.05], [0.042, y - 0.022]], 0.012, { bevel: 0.0015 });
+  G.prof('steel', [[0.024, y - 0.022], ['q', 0.028, y - 0.034, 0.018, y - 0.044], [0.014, y - 0.043], ['q', 0.022, y - 0.034, 0.018, y - 0.022]], 0.006, { bevel: 0.0008 });
+  G.prof('steel', [[-0.046, y + 0.004], [-0.058, y + 0.02], [-0.054, y + 0.026], [-0.044, y + 0.012]], 0.012, { bevel: 0.0012 });
+  // рукоять с резиновыми щёчками
+  G.prof('body', [[0.0, y - 0.02], ['q', -0.002, y - 0.075, -0.016, y - 0.13], [-0.066, y - 0.13], ['q', -0.064, y - 0.07, -0.05, y - 0.016]], 0.03, { bevel: 0.006, seg: 14 });
+  for (const sx of [-1, 1]) G.prof('rubber', [[-0.006, y - 0.03], ['q', -0.008, y - 0.075, -0.02, y - 0.12], [-0.058, y - 0.12], ['q', -0.056, y - 0.07, -0.046, y - 0.03]], 0.004, { x: sx * 0.016, bevel: 0.0015 });
+  G.box('metal', 0.032, 0.008, 0.052, -0.04, y - 0.134, { r: 0.002, target: 'mag' });
+  return { trigger: [0.02, y - 0.03], gripL: [-0.02, y - 0.07], muzzle: [0.225, y + 0.02], sight: y + 0.044, magTop: [-0.034, y - 0.12], bolt: [0.08, y + 0.02] };
+}
+
+// ---------- Глок (P9): детальная модель ----------
+function buildGlock(G) {
+  const y = 0;
+  G.box('metal', 0.0255, 0.03, 0.188, 0.054, y + 0.015, { r: 0.0035, target: 'bolt' });
+  for (let k = 0; k < 7; k++) G.box('rubber', 0.0262, 0.022, 0.0026, -0.032 + k * 0.0052, y + 0.016, { r: 0.0005, target: 'bolt' });
+  G.box('rubber', 0.0006, 0.012, 0.045, 0.06, y + 0.019, { x: 0.0128, target: 'bolt' });              // окно выброса
+  G.box('steel', 0.016, 0.007, 0.008, -0.034, y + 0.033, { r: 0.0015, target: 'bolt' }); G.box('steel', 0.004, 0.006, 0.006, 0.14, y + 0.033, { target: 'bolt' });
+  G.cyl('metal', 0.0065, 0.0065, 0.006, 0.146, y + 0.016, { seg: 16 });
+  // рамка из полимера с планкой и выступом под указательный
+  G.prof('body', [[-0.042, y], [0.145, y], [0.145, y - 0.012], [0.07, y - 0.014], [0.055, y - 0.018], [-0.008, y - 0.018]], 0.024, { bevel: 0.003 });
+  G.rail(0.075, 0.06, y - 0.02, 0.016);
+  G.prof('body', [[0.052, y - 0.014], ['q', 0.054, y - 0.04, 0.042, y - 0.044], [-0.002, y - 0.044], [-0.002, y - 0.038], [0.04, y - 0.038], ['q', 0.046, y - 0.036, 0.046, y - 0.014]], 0.012, { bevel: 0.0015 });
+  G.prof('steel', [[0.022, y - 0.018], ['q', 0.026, y - 0.028, 0.017, y - 0.036], [0.013, y - 0.035], ['q', 0.02, y - 0.028, 0.016, y - 0.018]], 0.0055, { bevel: 0.0008 });
+  // рукоять с текстурой и подпальцевыми выемками
+  G.prof('body', [[0.004, y - 0.016], ['q', 0.004, y - 0.03, -0.002, y - 0.04], ['q', 0.004, y - 0.052, -0.004, y - 0.064], ['q', 0.002, y - 0.078, -0.01, y - 0.106], [-0.054, y - 0.108], ['q', -0.054, y - 0.06, -0.044, y - 0.012], ['q', -0.05, y - 0.004, -0.054, y + 0.004], [-0.04, y + 0.002]], 0.026, { bevel: 0.005, seg: 14 });
+  for (let k = 0; k < 6; k++) for (const sx of [-1, 1]) G.box('rubber', 0.002, 0.008, 0.034, -0.026 - k * 0.0012, y - 0.03 - k * 0.012, { x: sx * 0.0128, r: 0.0008 });
+  G.box('metal', 0.026, 0.006, 0.046, -0.03, y - 0.11, { r: 0.002, target: 'mag' });
+  return { trigger: [0.02, y - 0.026], gripL: [-0.02, y - 0.06], muzzle: [0.15, y + 0.016], sight: y + 0.038, magTop: [-0.028, y - 0.1], bolt: [0.05, y + 0.015] };
+}
+
 // ---------- Каталог ----------
 const SPEC = {
-  p9: ['pistol', 'glock', 0.88], p18: ['pistol', 'makarov', 0.86], p92: ['pistol', 'beretta', 0.9], p50: ['pistol', 'deagle', 0.86],
+  p9: ['glock', {}, 0.88], p18: ['pistol', 'makarov', 0.86], p92: ['pistol', 'beretta', 0.9], p50: ['deagle', {}, 0.86],
   mx9: ['smg', 'mp5', 0.78], uz9: ['smg', 'uzi', 0.8], vx45: ['smg', 'vector', 0.8], pp19: ['smg', 'bizon', 0.72],
   ar4: ['m4', {}, 0.8], br17: ['ar', { hgLen: 0.3, barrelOut: 0.08, muzzle: 'brake', magLen: 0.1 }, 0.78],
   ak: ['ak47', {}, 0.74], akb: ['ak', { wood: false, stock: 'skeleton', muzzle: 'brake' }, 0.74],
-  sv98: ['sniper', 'bolt', 0.78], awr: ['sniper', 'awp', 0.78], dmr: ['sniper', 'dmr', 0.76], svd: ['sniper', 'svd', 0.7],
+  sv98: ['sniper', 'bolt', 0.78], awr: ['awp', {}, 0.78], dmr: ['sniper', 'dmr', 0.76], svd: ['sniper', 'svd', 0.7],
   sg12: ['shotgun', 'pumpWood', 0.8], dp12: ['shotgun', 'pumpTac', 0.8], as20: ['shotgun', 'aa12', 0.82], sai12: ['shotgun', 'saiga', 0.76],
 };
 export const hasProcGun = (id) => !!SPEC[id];
@@ -468,9 +546,10 @@ export function procGunGeometry(id) {
   if (GEO_CACHE.has(id)) return GEO_CACHE.get(id);
   const [fam, opt, S] = SPEC[id];
   const G = new GB();
-  const r = fam === 'ak47' ? buildAK47(G) : fam === 'm4' ? buildM4(G) : fam === 'pistol' ? buildPistol(G, opt) : fam === 'smg' ? buildSMG(G, opt) : fam === 'ar' ? buildAR(G, opt) : fam === 'ak' ? buildAK(G, opt) : fam === 'sniper' ? buildSniper(G, opt) : buildShotgun(G, opt);
+  const r = fam === 'ak47' ? buildAK47(G) : fam === 'm4' ? buildM4(G) : fam === 'awp' ? buildAWP(G) : fam === 'deagle' ? buildDeagle(G) : fam === 'glock' ? buildGlock(G) : fam === 'pistol' ? buildPistol(G, opt) : fam === 'smg' ? buildSMG(G, opt) : fam === 'ar' ? buildAR(G, opt) : fam === 'ak' ? buildAK(G, opt) : fam === 'sniper' ? buildSniper(G, opt) : buildShotgun(G, opt);
   // точка отсчёта — спусковой крючок; масштаб до размеров игры
   const [tf, ty] = r.trigger;
+  const isPistolFam = ['pistol', 'deagle', 'glock'].includes(fam);
   const m = new THREE.Matrix4().makeScale(S, S, S).multiply(new THREE.Matrix4().makeTranslation(0, -ty, tf));
   const roles = {};
   const box = new THREE.Box3();
@@ -484,7 +563,7 @@ export function procGunGeometry(id) {
   const P = (a, b = 0) => new THREE.Vector3(0, a[1], -a[0]).applyMatrix4(m).add(new THREE.Vector3(0, b, 0));
   const meta = {
     box, length: box.max.z - box.min.z,
-    muzzle: P(r.muzzle), gripR: P([tf - 0.045 * (fam === 'pistol' ? 0.6 : 1), ty - (fam === 'pistol' ? 0.04 : 0.05)]),
+    muzzle: P(r.muzzle), gripR: P([tf - 0.045 * (isPistolFam ? 0.6 : 1), ty - (isPistolFam ? 0.04 : 0.05)]),
     gripL: P(r.gripL), sightY: r.sight !== null && r.sight !== undefined ? (r.sight - ty) * S : null,
     magTop: r.magTop ? P(r.magTop) : null, bolt: r.bolt ? P(r.bolt) : null, scopeAt: r.scopeAt ? P(r.scopeAt) : null,
   };
